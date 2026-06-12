@@ -946,7 +946,7 @@ function loadDeliveries(){
   if(COURIER_FILTER==='today')filterDate=todayUz()
   else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
   var params={deliveryDate:filterDate}
-  if(ROLE==='co')params.courier=COURIER_ZONE
+  if(ROLE==='co')params.courier='K'+COURIER_ZONE
   api('getDeliveries',params,function(data,err){
     if(data&&data.deliveries){
       DELIVERIES=data.deliveries.map(function(d){
@@ -1025,7 +1025,7 @@ function addDeliveryRequest(deliveryDate){
   if(!CURR_ASSIGN)return
   if(!API){toast('API sozlanmagan!');return}
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
-  api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP,courier:CURR_ASSIGN.courier||''},function(data,err){
+  api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
     if(data&&data.success){
       toast("Yetkazishga qo'shildi 🚚")
       $('deliv-assign-box').style.display='none'
@@ -1198,7 +1198,7 @@ window.addEventListener('DOMContentLoaded',function(){
     if(!CID)return
     var c=findClient(CID)
     if(!c)return
-    CURR_ASSIGN={clientId:CID,clientName:c.name,courier:c.courier||''}
+    CURR_ASSIGN={clientId:CID,clientName:c.name}
     var box=$('deliv-assign-box')
     box.style.display=box.style.display==='none'?'block':'none'
   })

@@ -369,11 +369,10 @@ function ensureDeliveryCols(sh) {
   return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1, courierCol: crIdx + 1};
 }
 
-// Normalizes a courier-zone value so "K1"/"k1"/"1"/1 all compare equal.
+// Normalizes a courier-zone value for comparison: trims whitespace and
+// uppercases, so "k1"/"K1"/" K1 " all compare equal as "K1".
 function normCourier(v) {
-  v = String(v == null ? '' : v).trim();
-  if (v.charAt(0) === 'K' || v.charAt(0) === 'k') v = v.slice(1);
-  return v;
+  return String(v == null ? '' : v).trim().toUpperCase();
 }
 
 // Looks up the "courier" zone of a client in Mijozlar by id.
@@ -426,10 +425,7 @@ function addDelivery(data) {
     set('operator', data.operator || 'Operator');
     set('deliveryDate', data.deliveryDate || dateStr);
     set('status', 'pending');
-
-    var courier = normCourier(data.courier);
-    if (!courier) courier = lookupClientCourier(data.clientId);
-    set('courier', courier);
+    set('courier', lookupClientCourier(data.clientId));
 
     sh.appendRow(row);
     return {success: true, id: deliveryId};
@@ -513,6 +509,37 @@ function completeDelivery(deliveryId, qty, price, sum, payMethod) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ── DELIVERY: FIX COURIER ZONES (one-off утилита) ──────────────
+// Перезаписывает колонку "courier" у всех pending заявок в Buyurtmalar
+// значением из Mijozlar (по clientId). Запускать вручную из редактора
+// Apps Script: выбрать fixDeliveryCouriers в выпадающем списке и
+// нажать Run — деплой не нужен. Результат смотреть в "Выполнения"/Logger.
+function fixDeliveryCouriers() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ORDERS_SHEET);
+  if (!sh) return;
+
+  ensureDeliveryCols(sh);
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var cidIdx = headers.indexOf('clientId');
+  var crIdx = headers.indexOf('courier');
+  var statusIdx = headers.indexOf('status');
+
+  var fixed = 0, noZone = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    if (data[i][statusIdx] !== 'pending') continue;
+    var zone = lookupClientCourier(data[i][cidIdx]);
+    if (!zone) { noZone++; continue; }
+    if (normCourier(data[i][crIdx]) !== zone) {
+      sh.getRange(i+1, crIdx+1).setValue(zone);
+      fixed++;
+    }
+  }
+  Logger.log('Tuzatildi: ' + fixed + ', Mijozda zona yoq: ' + noZone);
 }
 
 // ── GET STATS ─────────────────────────────────────────────────
