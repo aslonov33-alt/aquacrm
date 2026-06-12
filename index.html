@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AquaCRM</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--blue:#1565C0;--blue2:#1976D2;--blue3:#0D47A1;--green:#2E7D32;--red:#C62828;--orange:#E65100;--sub:#546E7A;--bg:#F0F4F8;--card:#fff;--text:#1A237E;--r:14px;--purple:#6A1B9A}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);max-width:520px;margin:0 auto;display:flex;flex-direction:column}
+.topbar{background:linear-gradient(135deg,var(--blue3),var(--blue2));color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.tb-t{font-size:17px;font-weight:700}.tb-s{font-size:11px;opacity:.8;margin-top:1px}
+.sdot{width:8px;height:8px;border-radius:50%;background:#F44336;display:inline-block;margin-left:6px;vertical-align:middle}
+.sdot.on{background:#4CAF50}
+.wrap{flex:1;overflow:hidden;position:relative}
+.sc{display:none;position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 85px}
+.sc.on{display:block}
+.bnav{background:#fff;border-top:1px solid #E3E8F0;display:flex;flex-shrink:0;box-shadow:0 -2px 8px rgba(0,0,0,.08)}
+.ni{flex:1;display:flex;flex-direction:column;align-items:center;padding:9px 4px 10px;cursor:pointer;border:none;background:none;color:var(--sub);font-size:10px;gap:3px;transition:color .2s}
+.ni.on{color:var(--blue)}
+.ni-i{font-size:22px;position:relative;display:inline-block}
+.bdg{position:absolute;top:-4px;right:-10px;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.card{background:var(--card);border-radius:var(--r);box-shadow:0 2px 10px rgba(0,0,0,.09);margin-bottom:10px;overflow:hidden}
+.tap{cursor:pointer;transition:transform .1s}.tap:active{opacity:.75;transform:scale(.99)}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+.sc-card{background:var(--card);border-radius:12px;padding:12px 8px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.09)}
+.sn{font-size:22px;font-weight:800;line-height:1}
+.sl{font-size:10px;color:var(--sub);margin-top:3px;line-height:1.3}
+.tag{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600;display:inline-block;white-space:nowrap}
+.r{background:#FFEBEE;color:#C62828}.or{background:#FFF3E0;color:#E65100}
+.y{background:#FFFDE7;color:#F57F17}.g{background:#E8F5E9;color:#2E7D32}
+.b{background:#E3F2FD;color:#1565C0}.gr{background:#ECEFF1;color:#607D8B}
+.cy{background:#E0F7FA;color:#00838F}.pu{background:#F3E5F5;color:#6A1B9A}
+.ch{padding:12px 14px 6px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.cb{padding:0 14px 12px}
+.cn{font-size:15px;font-weight:700}
+.cp{font-size:12px;color:var(--blue);margin-top:2px}
+.ca{font-size:11px;color:var(--sub);margin-top:2px}
+.cm{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.sb{background:var(--card);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:10px;box-shadow:0 2px 10px rgba(0,0,0,.09)}
+.sb input{flex:1;border:none;outline:none;font-size:14px;color:var(--text);background:transparent}
+.fr{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.fr::-webkit-scrollbar{display:none}
+.pill{background:var(--card);border:1.5px solid #E3E8F0;border-radius:20px;padding:5px 12px;font-size:12px;color:var(--sub);cursor:pointer;white-space:nowrap;font-weight:500;flex-shrink:0}
+.pill.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.stl{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px}
+.pb{background:#E3E8F0;border-radius:4px;height:6px;overflow:hidden;margin-top:6px}
+.pf{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--blue),#00ACC1);transition:width .5s}
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center}
+.mo.on{display:flex}
+.mdl{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px}
+.mh2{width:40px;height:4px;background:#E0E0E0;border-radius:2px;margin:14px auto 0}
+.mhd{padding:14px 16px 10px;border-bottom:1px solid #F0F4F8}
+.mtt{font-size:17px;font-weight:800}
+.mbd{padding:14px 16px}
+.ir{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid #F8FAFC}
+.il{font-size:12px;color:var(--sub);flex-shrink:0;padding-right:8px}
+.iv{font-size:13px;font-weight:600;text-align:right;word-break:break-word;max-width:65%}
+.fin{width:100%;border:1.5px solid #E3E8F0;border-radius:10px;padding:10px 12px;font-size:14px;color:var(--text);background:#F8FAFC;outline:none;font-family:inherit;margin-top:6px}
+.fin:focus{border-color:var(--blue);background:#fff}
+select.fin{-webkit-appearance:none}
+textarea.fin{resize:none}
+.flbl{font-size:12px;color:var(--sub);margin-top:10px;display:block;font-weight:600}
+.btn{border:none;border-radius:12px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none;justify-content:center;transition:opacity .2s}
+.btn:active{opacity:.8}
+.bp{background:var(--blue);color:#fff}.bg2{background:var(--green);color:#fff}
+.bo{background:#F0F4F8;color:var(--blue);border:1.5px solid var(--blue)}
+.bred{background:#FFEBEE;color:var(--red);border:1.5px solid var(--red)}
+.bpu{background:#F3E5F5;color:var(--purple);border:1.5px solid var(--purple)}
+.bs{padding:8px 12px;font-size:13px}
+.ar{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.ph{background:linear-gradient(135deg,var(--blue3),#00ACC1);border-radius:var(--r);padding:24px;color:#fff;text-align:center;margin-bottom:12px}
+.av{width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 12px}
+.toast{position:fixed;bottom:75px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.95);color:#fff;padding:11px 22px;border-radius:24px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+.toast.on{opacity:1}
+.lm{width:100%;padding:12px;background:var(--card);border:1.5px solid #E3E8F0;border-radius:12px;font-size:13px;font-weight:600;color:var(--blue);cursor:pointer;margin-top:6px}
+.pi{font-size:11px;color:var(--sub);text-align:center;margin:6px 0}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--sub);font-size:14px;flex-direction:column}
+.sp{width:32px;height:32px;border:3px solid #E3E8F0;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* CALL HISTORY */
+.ch-hist{border-left:3px solid var(--blue);padding-left:10px;margin-bottom:10px;padding-bottom:4px}
+.ch-date{font-size:11px;color:var(--sub)}
+.ch-st{font-size:13px;font-weight:600;margin-top:2px}
+.ch-note{font-size:12px;color:var(--sub);margin-top:2px}
+/* ORDER HISTORY */
+.ord-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #F8FAFC;font-size:13px}
+.ord-date{color:var(--sub);font-size:11px}
+.ord-sum{font-weight:700;color:var(--green)}
+.ord-pay{font-size:11px}
+.ord-pay.pre{color:var(--purple);font-weight:600}
+/* COURIER */
+.courier-card{background:var(--card);border-radius:var(--r);box-shadow:0 2px 10px rgba(0,0,0,.09);margin-bottom:12px;overflow:hidden}
+.courier-header{background:linear-gradient(135deg,#1B5E20,#2E7D32);color:#fff;padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.courier-num{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0}
+.courier-body{padding:12px 14px}
+.courier-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #F0F4F8;font-size:13px}
+.courier-row:last-child{border:none}
+.pay-btn{border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;flex:1;margin:3px;transition:all .2s}
+.qty-box{display:flex;align-items:center;gap:10px;justify-content:center;margin:10px 0}
+.qty-btn{width:36px;height:36px;border-radius:50%;border:none;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qty-minus{background:#FFEBEE;color:#C62828}
+.qty-plus{background:#E8F5E9;color:#1B5E20}
+.qty-val{font-size:24px;font-weight:800;color:var(--text);min-width:40px;text-align:center}
+.total-box{background:linear-gradient(135deg,#1565C0,#00ACC1);color:#fff;border-radius:12px;padding:12px;text-align:center;margin:10px 0}
+.total-sum{font-size:26px;font-weight:800}
+.total-lbl{font-size:12px;opacity:.8;margin-top:2px}
+.c-summary{background:#E8F5E9;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:4px}
+
+/* LOGIN SCREEN */
+.login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0D47A1,#1976D2,#00ACC1);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.login-logo{font-size:64px;margin-bottom:12px}
+.login-title{font-size:28px;font-weight:800;color:#fff;margin-bottom:4px}
+.login-sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:32px}
+.login-box{background:#fff;border-radius:20px;padding:24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.login-role-title{font-size:13px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.login-roles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.role-card{border:2px solid #E3E8F0;border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .2s}
+.role-card:active{transform:scale(.97)}
+.role-card.op-card.sel{border-color:#1565C0;background:#E3F2FD}
+.role-card.co-card.sel{border-color:#2E7D32;background:#E8F5E9}
+.role-icon{font-size:32px;margin-bottom:6px}
+.role-name{font-size:13px;font-weight:700;color:var(--text)}
+.login-num-title{font-size:13px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.num-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px}
+.num-btn{border:2px solid #E3E8F0;border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;font-size:15px;font-weight:700;color:var(--text);background:#fff;transition:all .2s}
+.num-btn:active{transform:scale(.95)}
+.num-btn.sel{border-color:#1565C0;background:#1565C0;color:#fff}
+.num-btn.co-sel{border-color:#2E7D32;background:#2E7D32;color:#fff}
+.login-btn{width:100%;padding:16px;border:none;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,#1565C0,#00ACC1);color:#fff;margin-top:4px;transition:opacity .2s}
+.login-btn:disabled{opacity:.4;cursor:not-allowed}
+.login-btn:active:not(:disabled){opacity:.8}
+
+</style>
+</head>
+<body>
+
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="login-screen">
+  <div class="login-logo">💧</div>
+  <div class="login-title">AquaCRM</div>
+  <div class="login-sub">Buxoro suv yetkazib berish</div>
+  <div class="login-box">
+    <div class="login-role-title">Parolingizni kiriting</div>
+    <input type="password" id="login-pass" class="fin" placeholder="Parol..." style="margin-bottom:12px;font-size:18px;letter-spacing:3px;text-align:center">
+    <div id="login-err" style="color:#C62828;font-size:13px;text-align:center;min-height:18px;margin-bottom:8px"></div>
+    <button class="login-btn" id="login-btn">Kirish →</button>
+  </div>
+</div>
+
+<div class="topbar">
+  <div><div class="tb-t">💧 AquaCRM<span class="sdot" id="sdot"></span></div><div class="tb-s" id="tbs">Yuklanmoqda...</div></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn bs" style="background:rgba(255,255,255,.2);color:#fff;padding:6px 10px" id="sync-btn">🔄</button>
+    <button class="btn bs" style="background:rgba(255,255,255,.2);color:#fff;padding:6px 10px" id="prof-btn">👤</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- HOME -->
+<div class="sc on" id="sc-home">
+  <div class="g3">
+    <div class="sc-card"><div class="sn" style="color:var(--red)" id="s1">-</div><div class="sl">Shoshilinch</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--orange)" id="s2">-</div><div class="sl">Diqqat</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--blue)" id="s3">-</div><div class="sl">Jami mijoz</div></div>
+  </div>
+  <div class="g2">
+    <div class="sc-card"><div class="sn" style="color:#2E7D32" id="s4">0</div><div class="sl">Bugun qongiroq</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--sub)" id="s5">-</div><div class="sl">Qolgan</div></div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:13px;font-weight:700">Bugungi progress</span>
+      <span class="tag b" id="s6">0 / 0</span>
+    </div>
+    <div class="pb"><div class="pf" id="pb" style="width:0%"></div></div>
+  </div>
+  <div class="stl">Top-5 eng ustuvor</div>
+  <div id="top5"></div>
+</div>
+
+<!-- CLIENTS -->
+<div class="sc" id="sc-clients">
+  <div class="sb"><span style="color:var(--sub);font-size:18px">🔍</span><input type="search" id="sinp" placeholder="Ism, telefon, manzil..."></div>
+  <div class="fr" id="fpills">
+    <div class="pill on" data-f="all">Barchasi</div>
+    <div class="pill" data-f="urgent">🔴 Shoshilinch</div>
+    <div class="pill" data-f="warning">🟡 Diqqat</div>
+    <div class="pill" data-f="notcalled">📵 Yoq</div>
+    <div class="pill" data-f="called">✅ Qilindi</div>
+    <div class="pill" data-f="pre">🟣 Predoplata</div>
+  </div>
+  <div id="clist"></div>
+  <div class="pi" id="cinfo"></div>
+  <button class="lm" id="lmbtn" style="display:none">Koproq ⬇</button>
+</div>
+
+<!-- COURIER -->
+<div class="sc" id="sc-courier">
+  <div class="card" style="padding:14px;margin-bottom:12px" id="bottle-setup-box">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">🫙 Bugun nechta butilka oldingiz?</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button id="bot-minus" style="width:40px;height:40px;border-radius:50%;border:none;background:#FFEBEE;color:#C62828;font-size:22px;font-weight:700;cursor:pointer">-</button>
+      <input id="bot-input" type="number" value="0" min="0" style="flex:1;text-align:center;font-size:24px;font-weight:800;border:2px solid #E3E8F0;border-radius:10px;padding:8px;outline:none;color:var(--text)">
+      <button id="bot-plus" style="width:40px;height:40px;border-radius:50%;border:none;background:#E8F5E9;color:#2E7D32;font-size:22px;font-weight:700;cursor:pointer">+</button>
+      <button id="bot-save" style="background:#1565C0;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer">Saqlash</button>
+    </div>
+  </div>
+  <div class="g4">
+    <div class="sc-card"><div class="sn" style="color:var(--blue);font-size:18px" id="bot-taken">0</div><div class="sl">Olindi</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--green);font-size:18px" id="bot-delivered">0</div><div class="sl">Yetkazildi</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--orange);font-size:18px" id="bot-left">0</div><div class="sl">Qoldi</div></div>
+    <div class="sc-card"><div class="sn" style="color:var(--purple);font-size:18px" id="bot-pre">0</div><div class="sl">Predoplata</div></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:16px;font-weight:800">🚚 Bugungi yetkazishlar</div>
+    <span class="tag g" id="c-done-count">0 / 0</span>
+  </div>
+  <div class="c-summary">
+    <div><div style="font-size:14px;font-weight:800;color:#1B5E20" id="c-total-sum">0</div><div style="font-size:10px;color:var(--sub)">Jami</div></div>
+    <div><div style="font-size:14px;font-weight:800;color:#1565C0" id="c-cash-sum">0</div><div style="font-size:10px;color:var(--sub)">Naqd</div></div>
+    <div><div style="font-size:14px;font-weight:800;color:#00838F" id="c-trans-sum">0</div><div style="font-size:10px;color:var(--sub)">Click</div></div>
+    <div><div style="font-size:14px;font-weight:800;color:var(--purple)" id="c-pre-sum">0</div><div style="font-size:10px;color:var(--sub)">Predoplata</div></div>
+  </div>
+  <div id="courier-list"></div>
+</div>
+
+<!-- MAP -->
+<div class="sc" id="sc-map">
+  <div class="card tap" style="padding:20px;text-align:center;margin-bottom:14px" id="gmap-btn">
+    <div style="font-size:40px">🗺️</div>
+    <div style="font-size:15px;font-weight:700;margin-top:8px;color:var(--blue)">Google Maps ochish</div>
+  </div>
+  <div class="stl">Shoshilinch mijozlar manzillari</div>
+  <div id="maplist"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="sc" id="sc-profile">
+  <div class="ph" style="position:relative">
+  <button onclick="logout()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">Chiqish 🚪</button>
+    <div class="av" id="pav">👤</div>
+    <div style="font-size:19px;font-weight:800" id="pnm">Operator</div>
+    <div style="font-size:12px;opacity:.8;margin-top:3px" id="prl">Qongiroqlar bolimi</div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div class="stl" style="margin-top:0">Rol tanlash</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn bp" style="flex:1" id="role-op">📞 Operator</button>
+      <button class="btn bo" style="flex:1" id="role-co">🚚 Kuryer</button>
+    </div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div class="stl" style="margin-top:0">🔗 Google Sheets ulanish</div>
+    <span class="flbl">Apps Script URL</span>
+    <input class="fin" type="url" id="api-url" placeholder="https://script.google.com/macros/s/.../exec">
+    <span class="flbl">Operator ismi</span>
+    <input class="fin" type="text" id="op-name" placeholder="Masalan: Jasur">
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn bp" style="flex:1" id="save-api">💾 Saqlash</button>
+      <button class="btn bo" id="test-api">🧪 Test</button>
+    </div>
+    <div id="api-st" style="margin-top:8px;font-size:13px;text-align:center;min-height:20px"></div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div class="stl" style="margin-top:0">📊 Statistika</div>
+    <div class="ir"><span class="il">Jami mijozlar</span><span class="iv" id="pp1">-</span></div>
+    <div class="ir"><span class="il">Shoshilinch</span><span class="iv" style="color:var(--red)" id="pp2">-</span></div>
+    <div class="ir"><span class="il">Diqqat</span><span class="iv" style="color:var(--orange)" id="pp3">-</span></div>
+    <div class="ir"><span class="il">Predoplata</span><span class="iv" style="color:var(--purple)" id="pp4">-</span></div>
+    <div class="ir"><span class="il">Bugun qongiroq</span><span class="iv" style="color:var(--green)" id="pp5">0</span></div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div class="stl" style="margin-top:0">☎️ Aloqa</div>
+    <div class="ir"><span class="il">Asosiy</span><span class="iv"><a href="tel:+998956001113" style="color:var(--blue);font-weight:700">+998 95 600-1113</a></span></div>
+    <div class="ir"><span class="il">Qoshimcha</span><span class="iv"><a href="tel:+998956041113" style="color:var(--blue);font-weight:700">+998 95 604-1113</a></span></div>
+    <div class="ir"><span class="il">Dispetcher</span><span class="iv"><a href="tel:+998652261001" style="color:var(--blue);font-weight:700">+998 65 226-1001</a></span></div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<!-- CLIENT MODAL -->
+<div class="mo" id="modal">
+  <div class="mdl">
+    <div class="mh2"></div>
+    <div class="mhd">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="mtt" id="mn">-</div>
+        <button class="btn bo bs" id="edit-btn">✏️ Tahrir</button>
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap" id="mtags"></div>
+    </div>
+    <div class="mbd">
+
+      <!-- VIEW -->
+      <div id="view-sec">
+        <div class="ir"><span class="il">📱 Telefon</span><span class="iv"><a id="mtel" href="#" style="color:var(--blue);font-weight:700">-</a></span></div>
+        <div class="ir" id="mp2r" style="display:none"><span class="il">📱 Qoshimcha</span><span class="iv"><a id="mtel2" href="#" style="color:var(--blue)">-</a></span></div>
+        <div class="ir"><span class="il">📍 Manzil</span><span class="iv" id="madr">-</span></div>
+        <div class="ir"><span class="il">👤 Menejer</span><span class="iv" id="mmgr">-</span></div>
+        <div class="ir"><span class="il">💰 Qarz</span><span class="iv" id="mdbt">-</span></div>
+        <div class="ir"><span class="il">📦 Buyurtmalar</span><span class="iv" id="mord">-</span></div>
+        <div class="ir"><span class="il">📅 Oxirgi buyurtma</span><span class="iv" id="mlst">-</span></div>
+        <div class="ir"><span class="il">⏳ Kunlar</span><span class="iv" id="mdys">-</span></div>
+        <div class="ir"><span class="il">📞 Oxirgi qongiroq</span><span class="iv" id="mlcall" style="color:var(--blue)">-</span></div>
+        <div class="ir"><span class="il">🚚 Kuryer</span><span class="iv" id="mcour">-</span></div>
+        <div class="ir" id="mpre-row"><span class="il">🟣 Predoplata</span><span class="iv" id="mpre" style="color:var(--purple);font-weight:700">-</span></div>
+      </div>
+
+      <!-- EDIT -->
+      <div id="edit-sec" style="display:none">
+        <div style="background:#E3F2FD;border-radius:10px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--blue)">✏️ Tahrirlash — ozgarishlar Google Sheets ga saqlanadi</div>
+        <span class="flbl">Ism</span><input class="fin" id="e-name" type="text">
+        <span class="flbl">Asosiy telefon</span><input class="fin" id="e-phone" type="tel">
+        <span class="flbl">Qoshimcha telefon</span><input class="fin" id="e-phone2" type="tel">
+        <span class="flbl">Manzil</span><input class="fin" id="e-addr" type="text">
+        <span class="flbl">Menejer</span><input class="fin" id="e-mgr" type="text">
+        <span class="flbl">Predoplata</span>
+        <select class="fin" id="e-pre">
+          <option value="">Yoq</option>
+          <option value="yes">Ha — predoplata</option>
+        </select>
+        <span class="flbl">Izoh</span><textarea class="fin" id="e-note" rows="2"></textarea>
+        <div class="ar">
+          <button class="btn bp" id="save-edit" style="flex:1">💾 Saqlash</button>
+          <button class="btn bo" id="cancel-edit">✕</button>
+        </div>
+      </div>
+
+      <!-- CALL -->
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F0F4F8">
+        <div class="stl" style="margin-top:0">📞 Qongiroq qilish</div>
+        <select class="fin" id="mst">
+          <option value="">— Holat tanlang —</option>
+          <option value="called">✅ Qongiroq qilindi / Buyurtma olindi</option>
+          <option value="noanswer">📵 Javob yoq</option>
+          <option value="callback">🔄 Qayta qongiroq kerak</option>
+          <option value="unavail">❌ Telefon ochiq</option>
+          <option value="refused">⛔ Rad etdi</option>
+          <option value="delivery">🚚 Yetkazish kerak</option>
+        </select>
+        <textarea class="fin" id="mnote" rows="2" placeholder="Izoh..."></textarea>
+        <div class="ar">
+          <a class="btn bg2" id="mcall" href="#">📞 Qongiroq</a>
+          <button class="btn bp" id="msave" style="flex:1">✅ Saqlash</button>
+          <button class="btn" id="m-assign" style="background:#E8F5E9;color:#1B5E20;border:2px solid #2E7D32;padding:8px 12px;font-size:13px">🚚</button>
+        </div>
+      </div>
+
+      <!-- CALL HISTORY -->
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F0F4F8">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="stl" style="margin-top:0;margin-bottom:0">📋 Qongiroqlar tarixi</div>
+        </div>
+        <div id="chist" style="margin-top:8px"></div>
+      </div>
+
+      <!-- ORDER HISTORY -->
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F0F4F8">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="stl" style="margin-top:0;margin-bottom:0">📦 Buyurtmalar tarixi</div>
+          <span class="tag pu" id="ord-count"></span>
+        </div>
+        <div id="ohist" style="margin-top:8px"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- DELIVERY MODAL -->
+<div class="mo" id="deliv-modal">
+  <div class="mdl">
+    <div class="mh2"></div>
+    <div class="mhd">
+      <div class="mtt" id="dm-name">-</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:4px" id="dm-addr">-</div>
+    </div>
+    <div class="mbd">
+      <div class="courier-row"><span style="color:var(--sub)">Telefon</span><a id="dm-tel" href="#" style="color:var(--blue);font-weight:700">-</a></div>
+      <div class="courier-row"><span style="color:var(--sub)">Qarz</span><span id="dm-debt" style="font-weight:700">-</span></div>
+      <div class="courier-row" id="dm-pre-row" style="display:none"><span style="color:var(--purple);font-weight:700">🟣 PREDOPLATA</span><span style="color:var(--purple);font-weight:700" id="dm-pre-val">-</span></div>
+      <div class="stl" style="margin-top:12px">Butilkalar soni</div>
+      <div class="qty-box">
+        <button class="qty-btn qty-minus" id="qty-minus">-</button>
+        <div class="qty-val" id="qty-val">1</div>
+        <button class="qty-btn qty-plus" id="qty-plus">+</button>
+      </div>
+      <div class="stl">Narx (1 butilka)</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="pay-btn" id="price-13" style="background:#2E7D32;color:#fff;border:2px solid #2E7D32;flex:1">13 000 som</button>
+        <button class="pay-btn" id="price-15" style="background:#F0F4F8;color:var(--sub);border:2px solid #E3E8F0;flex:1">15 000 som</button>
+      </div>
+      <div class="total-box">
+        <div class="total-sum" id="dm-total">13 000 som</div>
+        <div class="total-lbl">Tolash summasi</div>
+      </div>
+      <div class="stl">Tolash usuli</div>
+      <div style="display:flex;gap:6px">
+        <button class="pay-btn" id="pay-cash" style="background:#2E7D32;color:#fff;border:2px solid #2E7D32;flex:1">Naqd</button>
+        <button class="pay-btn" id="pay-trans" style="background:#F0F4F8;color:var(--sub);border:2px solid #E3E8F0;flex:1">Click/Payme</button>
+        <button class="pay-btn" id="pay-pre" style="background:#F3E5F5;color:var(--purple);border:2px solid var(--purple);flex:1">Predoplata</button>
+      </div>
+      <div class="ar" style="margin-top:14px">
+        <a class="btn bg2" id="dm-call" href="#">📞 Qongiroq</a>
+        <a class="btn bo bs" id="dm-map" href="#" target="_blank">🗺️ Xarita</a>
+        <button class="btn bp" id="dm-done" style="flex:1">✅ Yetkazildi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bnav">
+  <button class="ni on" id="ni-home"><span class="ni-i">🏠</span><span>Bosh sahifa</span></button>
+  <button class="ni" id="ni-clients"><span class="ni-i">👥<span class="bdg" id="bu">0</span></span><span>Mijozlar</span></button>
+  <button class="ni" id="ni-courier"><span class="ni-i">🚚<span class="bdg" id="bc" style="display:none">0</span></span><span>Yetkazish</span></button>
+  <button class="ni" id="ni-map"><span class="ni-i">🗺️</span><span>Xarita</span></button>
+  <button class="ni" id="ni-profile"><span class="ni-i">⚙️</span><span>Sozlamalar</span></button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══ STATE ═══
+var API='', OP='Operator', ROLE='op';
+var D=[], ST={}, CF='all', CID=null, PG=40, OF=0, FL=[];
+var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
+var BOT_TAKEN=0;
+
+// ═══ UTILS ═══
+function $(i){return document.getElementById(i);}
+function E(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
+function toast(m){var t=$('toast');t.textContent=m;t.className='toast on';clearTimeout(t._t);t._t=setTimeout(function(){t.className='toast'},2500)}
+function fmtSum(n){return n?(parseInt(n)||0).toLocaleString()+' som':'0 som'}
+
+// ═══ API ═══
+function api(action,data,cb){
+  if(!API){cb&&cb(null,'URL kiritilmagan');return}
+  fetch(API+'?action='+action,{method:'POST',body:JSON.stringify(Object.assign({action:action},data))})
+    .then(function(r){return r.json()})
+    .then(function(d){cb&&cb(d,null)})
+    .catch(function(e){cb&&cb(null,e.toString())})
+}
+
+function loadClients(){
+  if(!API){
+    $('clist').innerHTML='<div style="text-align:center;padding:30px"><div style="font-size:40px">⚙️</div><div style="font-size:15px;font-weight:700;margin-top:10px;color:var(--blue)">Sozlamalarni kiriting</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Pastdagi ⚙️ tugmani bosing</div></div>'
+    return
+  }
+  if(LOADING) return;
+  D=[]
+  LOADING=false;
+  $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... 0</div>'
+  loadPage(0)
+}
+
+var LOADING=false;
+function loadPage(offset){
+  if(LOADING && offset===0) return;
+  if(offset===0) LOADING=true;
+  api('getClients',{offset:offset,limit:500},function(data,err){
+    if(err||!data||data.error){
+      LOADING=false;
+      $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+(err||data.error)+'</div>'
+      return
+    }
+    var batch=data.clients||[]
+    // Prevent duplicates
+    var existingIds=new Set(D.map(function(c){return c.id}));
+    batch=batch.filter(function(c){return !existingIds.has(c.id)});
+    D=D.concat(batch)
+    processD()
+    $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... '+D.length+' / '+data.total+'</div>'
+    if(data.hasMore){
+      loadPage(offset+500)
+    } else {
+      LOADING=false;
+      renderAll()
+      toast('Yuklandi: '+D.length+' ta mijoz')
+    }
+  })
+}
+
+function processD(){
+  D.forEach(function(c){
+    c.days=parseInt(c.days)||0
+    c.debt=parseInt(c.debt)||0
+    c.orders=parseInt(c.orders)||0
+    if(c.days>365)c.priority='urgent'
+    else if(c.days>180||c.debt>0)c.priority='warning'
+    else c.priority='ok'
+    // Set lastCall from lastCallDate or lastCallAny
+    if(!c.lastCall){
+      c.lastCall=c.lastCallDate||c.lastCallAny||''
+    }
+    // wasCalled
+    c.wasCalled=(c.wasCalled==='TRUE'||c.wasCalled===true||c.lastCall!=='')
+  })
+}
+
+function syncStats(){
+  api('getStats',{},function(data,err){
+    if(data&&!data.error){
+      $('s4').textContent=data.todayCalls||0
+      $('pp5').textContent=data.todayCalls||0
+      $('sdot').className='sdot on'
+    }
+  })
+}
+
+// ═══ STATS ═══
+function stats(){
+  var urg=0,wn=0,pre=0,cal=0,i
+  for(i=0;i<D.length;i++){
+    if(D[i].priority==='urgent')urg++
+    else if(D[i].priority==='warning')wn++
+    if(D[i].predoplata==='yes'||D[i].predoplata===true)pre++
+    if(ST[D[i].id]&&ST[D[i].id].status==='called')cal++
+  }
+  var left=D.length-cal,pct=D.length?(cal/D.length*100).toFixed(1):0
+  $('s1').textContent=urg;$('s2').textContent=wn;$('s3').textContent=D.length.toLocaleString()
+  if(!$('sdot').classList.contains('on'))$('s4').textContent=cal
+  $('s5').textContent=left.toLocaleString()
+  $('s6').textContent=cal+' / '+D.length;$('pb').style.width=pct+'%'
+  $('bu').textContent=urg
+  $('pp1').textContent=D.length.toLocaleString();$('pp2').textContent=urg
+  $('pp3').textContent=wn;$('pp4').textContent=pre;
+}
+
+function renderAll(){stats();top5();renderC(true);mapList()}
+
+// ═══ TAGS ═══
+function ptag(c){
+  if(c.priority==='urgent')return '<span class="tag r">🔴</span>'
+  if(c.priority==='warning')return '<span class="tag or">🟡</span>'
+  return '<span class="tag g">🟢</span>'
+}
+function stag(s){
+  var m={called:'<span class="tag g">✅</span>',noanswer:'<span class="tag r">📵</span>',
+    callback:'<span class="tag or">🔄</span>',unavail:'<span class="tag gr">❌</span>',
+    refused:'<span class="tag gr">⛔</span>',delivery:'<span class="tag b">🚚</span>'}
+  return m[s]||''
+}
+
+function top5(){
+  var lst=[],i
+  for(i=0;i<D.length&&lst.length<5;i++){
+    if(D[i].priority==='urgent'&&!(ST[D[i].id]&&ST[D[i].id].status))lst.push(D[i])
+  }
+  var el=$('top5')
+  if(!lst.length){el.innerHTML='<div style="text-align:center;color:var(--sub);padding:16px;font-size:13px">Shoshilinch mijozlar yoq 🎉</div>';return}
+  el.innerHTML=lst.map(function(c){
+    return '<div class="card tap" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+'</div><div class="cp">'+E(c.phone||'')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><span class="tag r">'+(c.days||'?')+' kun</span></div><div class="cb"><div class="cm"><span class="tag gr">'+(c.orders||0)+' buyurtma</span></div></div></div>'
+  }).join('')
+  el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){openC(this.dataset.cid)})})
+}
+
+function getFL(){
+  var q=($('sinp').value||'').toLowerCase()
+  return D.filter(function(c){
+    if(q&&c.name.toLowerCase().indexOf(q)<0&&(c.phone||'').indexOf(q)<0&&(c.addr||'').toLowerCase().indexOf(q)<0&&(c.phone2||'').indexOf(q)<0)return false
+    var s=ST[c.id]?ST[c.id].status:''
+    if(CF==='urgent')return c.priority==='urgent'
+    if(CF==='warning')return c.priority==='warning'
+    if(CF==='called')return s==='called'||c.lastCallDate||c.wasCalled==='TRUE'||c.wasCalled===true
+    if(CF==='notcalled')return !s&&!c.lastCallDate&&c.wasCalled!=='TRUE'&&c.wasCalled!==true
+    if(CF==='pre')return c.predoplata==='yes'||c.predoplata===true
+    return true
+  })
+}
+
+function renderC(reset){
+  if(reset){OF=0;FL=getFL()}
+  var sl=FL.slice(0,OF+PG),el=$('clist')
+  if(!FL.length){el.innerHTML='<div style="text-align:center;color:var(--sub);padding:24px">Topilmadi</div>';$('lmbtn').style.display='none';$('cinfo').textContent='';return}
+  el.innerHTML=sl.map(function(c){
+    var s=ST[c.id]?ST[c.id].status:''
+    var pre=c.predoplata==='yes'||c.predoplata===true
+    var dt=c.days?'<span class="tag '+(c.days>365?'r':c.days>180?'or':'y')+'">'+c.days+' kun</span>':''
+    var k=c.courier?'<span class="tag gr">K'+c.courier+'</span>':''
+    return '<div class="card tap" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+E(c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+'</div></div></div>'
+  }).join('')
+  el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){openC(this.dataset.cid)})})
+  $('cinfo').textContent='Korsatilmoqda: '+sl.length+' / '+FL.length
+  $('lmbtn').style.display=sl.length<FL.length?'block':'none'
+}
+
+function mapList(){
+  var lst=D.filter(function(c){return c.priority==='urgent'&&(c.addrMaps||c.addr)}).slice(0,30)
+  $('maplist').innerHTML=lst.map(function(c){
+    var maddr=c.addrMaps||c.addr+', Buxoro'
+    return '<div class="card tap" data-addr="'+E(maddr)+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+'</div><div class="ca">📍 '+E(c.addrNorm||c.addr)+'</div></div><span class="tag r">'+(c.days||'?')+' kun</span></div></div>'
+  }).join('')
+  $('maplist').querySelectorAll('[data-addr]').forEach(function(el){
+    el.addEventListener('click',function(){window.open('https://www.google.com/maps/search/'+encodeURIComponent(this.dataset.addr),'_blank')})
+  })
+}
+
+// ═══ OPEN CLIENT ═══
+function openC(id){
+  var c=null,i
+  for(i=0;i<D.length;i++){if(String(D[i].id)===String(id)){c=D[i];break}}
+  if(!c)return
+  CID=id
+  var s=ST[id]||{}
+  var pre=c.predoplata==='yes'||c.predoplata===true
+  setEdit(false)
+  $('mn').textContent=c.name
+  var tags=ptag(c)+(s.status?stag(s.status):'')+(pre?'<span class="tag pu">🟣 Predoplata</span>':'')
+  $('mtags').innerHTML=tags
+  $('mtel').textContent=c.phone||'—';$('mtel').href=c.phone?'tel:'+c.phone:'#'
+  $('mcall').href=c.phone?'tel:'+c.phone:'#'
+  if(c.phone2){$('mtel2').textContent=c.phone2;$('mtel2').href='tel:'+c.phone2;$('mp2r').style.display='flex'}
+  else $('mp2r').style.display='none'
+  $('madr').textContent=(c.addrNorm||c.addr)||'—'
+  $('mmgr').textContent=c.manager||'—'
+  $('mdbt').textContent=c.debt>0?c.debt.toLocaleString()+' som':'Qarz yoq'
+  $('mdbt').style.color=c.debt>0?'var(--red)':'var(--green)'
+  $('mord').textContent=(c.orders||0)+' ta'
+  $('mlst').textContent=c.lastOrder||'—'
+  $('mdys').textContent=c.days?c.days+' kun oldin':'—'
+  $('mlcall').textContent=s.lastCall||c.lastCallDate||'Qongiroq qilinmagan'
+  $('mcour').textContent=c.courier?'Kuryer '+c.courier:'Belgilanmagan'
+  if(pre){$('mpre').textContent='Ha ✅';$('mpre-row').style.display='flex'}
+  else $('mpre-row').style.display='none'
+  // Edit form
+  $('e-name').value=c.name||''
+  $('e-phone').value=c.phone||''
+  $('e-phone2').value=c.phone2||''
+  $('e-addr').value=(c.addrNorm||c.addr)||''
+  $('e-mgr').value=c.manager||''
+  $('e-pre').value=pre?'yes':''
+  $('e-note').value=c.note||''
+  // Call
+  $('mst').value=s.status||'';$('mnote').value=''
+  $('modal').className='mo on'
+  // Load histories
+  loadCallHist(id)
+  loadOrderHist(id,c,pre)
+}
+
+function setEdit(on){
+  $('view-sec').style.display=on?'none':'block'
+  $('edit-sec').style.display=on?'block':'none'
+  $('edit-btn').textContent=on?'✕ Yopish':'✏️ Tahrir'
+}
+
+// ═══ CALL HISTORY ═══
+function loadCallHist(id){
+  var el=$('chist')
+  var local=ST[id]&&ST[id].hist?ST[id].hist:[]
+  if(local.length)renderCallHist(local)
+  else el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Tarixi yoq</div>'
+  if(API){
+    api('getCalls',{clientId:id},function(data,err){
+      if(data&&data.calls&&data.calls.length)renderCallHist(data.calls)
+    })
+  }
+}
+
+function renderCallHist(calls){
+  var el=$('chist')
+  if(!calls||!calls.length){el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Tarixi yoq</div>';return}
+  var sm={called:'✅ Qongiroq qilindi',noanswer:'📵 Javob yoq',callback:'🔄 Qayta',unavail:'❌ Ochiq',refused:'⛔ Rad',delivery:'🚚 Yetkazish'}
+  el.innerHTML=calls.slice(0,20).map(function(c){
+    return '<div class="ch-hist"><div class="ch-date">📅 '+(c.callDate||'')+(c.callTime?' '+c.callTime:'')+(c.operator?' · '+c.operator:'')+'</div><div class="ch-st">'+(sm[c.status]||c.status||'—')+'</div>'+(c.note?'<div class="ch-note">💬 '+E(c.note)+'</div>':'')+'</div>'
+  }).join('')
+}
+
+// ═══ ORDER HISTORY ═══
+function loadOrderHist(id,c,isPre){
+  var el=$('ohist'),cnt=$('ord-count')
+  el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Yuklanmoqda...</div>'
+  if(!API){
+    el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Sheets ulanmagan</div>'
+    return
+  }
+  // Load order history from sheets
+  api('getOrders',{clientId:id,isPredoplata:isPre},function(data,err){
+    if(err||!data||data.error){
+      el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Ma\'lumot yoq</div>'
+      return
+    }
+    var orders=data.orders||[]
+    // Limit: 30 for regular, all for predoplata
+    var limit=isPre?orders.length:30
+    var show=orders.slice(0,limit)
+    cnt.textContent=show.length+(isPre?' ta (hammasi)':' ta (oxirgi 30)')
+    if(!show.length){
+      el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Buyurtma yoq</div>'
+      return
+    }
+    el.innerHTML=show.map(function(o){
+      var isPay=o.payMethod==='pre'
+      return '<div class="ord-item"><div><div style="font-weight:600">'+E(o.date||'—')+'</div><div class="ord-date">'+E(o.note||'')+'</div></div><div style="text-align:right"><div class="ord-sum">'+fmtSum(o.sum)+'</div><div class="ord-pay'+(isPay?' pre':'')+'">'+E(o.payMethod==='cash'?'💵 Naqd':o.payMethod==='trans'?'📱 Click':'🟣 Predoplata')+'</div></div></div>'
+    }).join('')
+  })
+}
+
+// ═══ SAVE CALL ═══
+function saveCall(){
+  if(!CID)return
+  var status=$('mst').value,note=$('mnote').value
+  if(!status){toast('Holat tanlang!');return}
+  var c=null,i
+  for(i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+  if(!c)return
+  var now=new Date(),dateStr=now.toLocaleDateString('ru-RU'),timeStr=now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})
+  var lc=dateStr+' '+timeStr
+  if(!ST[CID])ST[CID]={}
+  ST[CID].status=status;ST[CID].note=note;ST[CID].lastCall=lc
+  if(!ST[CID].hist)ST[CID].hist=[]
+  ST[CID].hist.unshift({callDate:dateStr,callTime:timeStr,status:status,note:note,operator:OP})
+  c.lastCallDate=lc
+  $('mlcall').textContent=lc
+  $('modal').className='mo'
+  renderAll()
+  if(API){
+    api('logCall',{clientId:CID,clientName:c.name,phone:c.phone,operator:OP,status:status,note:note},function(data,err){
+      toast(data&&data.success?'Saqlandi ✅':'Lokal saqlandi')
+    })
+  } else toast('Lokal saqlandi ✅')
+}
+
+// ═══ SAVE EDIT ═══
+function saveEdit(){
+  if(!CID)return
+  var c=null,i
+  for(i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+  if(!c)return
+  var upd={
+    id:CID,
+    name:$('e-name').value.trim()||c.name,
+    phone:$('e-phone').value.trim(),
+    phone2:$('e-phone2').value.trim(),
+    addr:$('e-addr').value.trim(),
+    addrNorm:$('e-addr').value.trim(),
+    manager:$('e-mgr').value.trim(),
+    predoplata:$('e-pre').value,
+    note:$('e-note').value.trim()
+  }
+  // Update local
+  for(var k in upd){if(k!='id')c[k]=upd[k]}
+  setEdit(false)
+  // Refresh view
+  $('mn').textContent=c.name
+  $('mtel').textContent=c.phone||'—';$('mtel').href=c.phone?'tel:'+c.phone:'#'
+  $('mcall').href=c.phone?'tel:'+c.phone:'#'
+  $('madr').textContent=c.addrNorm||c.addr||'—'
+  renderAll()
+  if(API){
+    api('updateClient',upd,function(data,err){
+      toast(data&&data.success?'Yangilandi ✅':'Lokal yangilandi')
+    })
+  } else toast('Lokal yangilandi ✅')
+}
+
+// ═══ COURIER ═══
+function updateBotStats(){
+  var del=DELIVERIES.filter(function(d){return d.done&&d.payMethod!=='pre'}).reduce(function(s,d){return s+d.qty},0)
+  var pre=DELIVERIES.filter(function(d){return d.done&&d.payMethod==='pre'}).reduce(function(s,d){return s+d.qty},0)
+  var left=BOT_TAKEN-del-pre
+  var el;
+  el=$('bot-taken');if(el)el.textContent=BOT_TAKEN
+  el=$('bot-delivered');if(el)el.textContent=del
+  el=$('bot-left');if(el)el.textContent=Math.max(0,left)
+  el=$('bot-pre');if(el)el.textContent=pre
+  var box=$('bottle-setup-box');
+  if(box)box.style.display=BOT_TAKEN>0?'none':'block'
+}
+
+function renderCourier(){
+  updateBotStats()
+  // Sort by address
+  DELIVERIES.sort(function(a,b){
+    var ca=null,cb_=null,j
+    for(j=0;j<D.length;j++){if(String(D[j].id)===String(a.clientId))ca=D[j]}
+    for(j=0;j<D.length;j++){if(String(D[j].id)===String(b.clientId))cb_=D[j]}
+    var aa=ca?(ca.addrNorm||ca.addr||''):'';var ab=cb_?(cb_.addrNorm||cb_.addr||''):''
+    return aa.localeCompare(ab,'uz')
+  })
+  var el=$('courier-list')
+  var done=DELIVERIES.filter(function(d){return d.done})
+  $('c-done-count').textContent=done.length+' / '+DELIVERIES.length
+  var bc=DELIVERIES.filter(function(d){return !d.done}).length
+  $('bc').textContent=bc;$('bc').style.display=bc?'flex':'none'
+  var tSum=0,cSum=0,tSm=0,pSm=0
+  DELIVERIES.forEach(function(d){
+    if(d.done){tSum+=d.sum;if(d.payMethod==='cash')cSum+=d.sum;else if(d.payMethod==='trans')tSm+=d.sum;else if(d.payMethod==='pre')pSm+=d.sum}
+  })
+  var e2;
+  e2=$('c-total-sum');if(e2)e2.textContent=tSum.toLocaleString()+' som'
+  e2=$('c-cash-sum');if(e2)e2.textContent=cSum.toLocaleString()+' som'
+  e2=$('c-trans-sum');if(e2)e2.textContent=tSm.toLocaleString()+' som'
+  e2=$('c-pre-sum');if(e2)e2.textContent=pSm.toLocaleString()+' som'
+  if(!DELIVERIES.length){
+    el.innerHTML='<div style="text-align:center;color:var(--sub);padding:30px;font-size:13px">Bugun yetkazish yoq.<br>Operator tomonidan tayinlanadi.</div>'
+    return
+  }
+  el.innerHTML=DELIVERIES.map(function(d,i){
+    var c=null,j
+    for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
+    if(!c)return ''
+    var pre=c.predoplata==='yes'||c.predoplata===true
+    var pm=d.payMethod==='cash'?'💵 Naqd':d.payMethod==='trans'?'📱 Click':'🟣 Predoplata'
+    var bg=d.done?'opacity:.7':'';
+    return '<div class="courier-card" style="'+bg+'" data-didx="'+i+'"><div class="courier-header">'+(pre?'<div style="position:absolute;right:10px;top:8px;font-size:10px;background:rgba(255,255,255,.2);padding:2px 6px;border-radius:8px">🟣 PREDOPLATA</div>':'')+
+      '<div class="courier-num">'+(i+1)+'</div>'+
+      '<div style="flex:1;margin-left:10px"><div style="font-size:15px;font-weight:700">'+E(c.name)+'</div><div style="font-size:11px;opacity:.8">'+E(c.phone||'')+'</div></div>'+
+      (d.done?'<span class="tag g">✅</span>':'<span class="tag or">⏳</span>')+
+      '</div><div class="courier-body">'+
+      '<div class="courier-row"><span style="color:var(--sub)">📍 Manzil</span><span style="font-weight:600;text-align:right;max-width:60%;font-size:12px">'+E(c.addrNorm||c.addr||'—')+'</span></div>'+
+      '<div class="courier-row"><span style="color:var(--sub)">🫙 Butilka</span><span style="font-weight:700;color:var(--blue)">'+d.qty+' ta</span></div>'+
+      '<div class="courier-row"><span style="color:var(--sub)">💰 Summa</span><span style="font-weight:700;color:#1B5E20">'+d.sum.toLocaleString()+' som</span></div>'+
+      '<div class="courier-row"><span style="color:var(--sub)">📱 Tolash</span><span style="font-weight:600">'+pm+'</span></div>'+
+      (c.debt>0?'<div class="courier-row"><span style="color:var(--red)">⚠️ Qarz</span><span style="font-weight:700;color:var(--red)">'+c.debt.toLocaleString()+' som</span></div>':'')+
+      '</div></div>'
+  }).join('')
+  el.querySelectorAll('[data-didx]').forEach(function(el){
+    el.addEventListener('click',function(){openDelivery(parseInt(this.dataset.didx))})
+  })
+}
+
+function openDelivery(idx){
+  var d=DELIVERIES[idx]
+  var c=null,j
+  for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
+  if(!c)return
+  CURR_DELIV=idx;CURR_QTY=d.qty||1;CURR_PRICE=d.price||13000;CURR_PAY=d.payMethod||'cash'
+  var pre=c.predoplata==='yes'||c.predoplata===true
+  $('dm-name').textContent=c.name
+  $('dm-addr').textContent='📍 '+(c.addrNorm||c.addr||'—')
+  $('dm-tel').textContent=c.phone||'—';$('dm-tel').href=c.phone?'tel:'+c.phone:'#'
+  $('dm-call').href=c.phone?'tel:'+c.phone:'#'
+  var maddr=c.addrMaps||(c.addrNorm||c.addr||'')+', Buxoro, Uzbekistan'
+  $('dm-map').href='https://www.google.com/maps/search/'+encodeURIComponent(maddr)
+  $('dm-debt').textContent=c.debt>0?c.debt.toLocaleString()+' som ⚠️':'Qarz yoq ✅'
+  $('dm-debt').style.color=c.debt>0?'var(--red)':'var(--green)'
+  if(pre){$('dm-pre-row').style.display='flex';$('dm-pre-val').textContent='Ha — predoplata'}
+  else $('dm-pre-row').style.display='none'
+  // Auto-set predoplata payment
+  if(pre)CURR_PAY='pre'
+  updateDelivTotal();updatePayBtns()
+  $('deliv-modal').className='mo on'
+}
+
+function updateDelivTotal(){
+  $('qty-val').textContent=CURR_QTY
+  $('dm-total').textContent=(CURR_QTY*CURR_PRICE).toLocaleString()+' som'
+  $('price-13').style.background=CURR_PRICE===13000?'#2E7D32':'#E8F5E9'
+  $('price-13').style.color=CURR_PRICE===13000?'#fff':'#1B5E20'
+  $('price-15').style.background=CURR_PRICE===15000?'#1565C0':'#F0F4F8'
+  $('price-15').style.color=CURR_PRICE===15000?'#fff':'var(--sub)'
+}
+
+function updatePayBtns(){
+  var el
+  el=$('pay-cash');if(el){el.style.background=CURR_PAY==='cash'?'#2E7D32':'#E8F5E9';el.style.color=CURR_PAY==='cash'?'#fff':'#1B5E20'}
+  el=$('pay-trans');if(el){el.style.background=CURR_PAY==='trans'?'#1565C0':'#E3F2FD';el.style.color=CURR_PAY==='trans'?'#fff':'#0D47A1'}
+  el=$('pay-pre');if(el){el.style.background=CURR_PAY==='pre'?'#6A1B9A':'#F3E5F5';el.style.color=CURR_PAY==='pre'?'#fff':'#6A1B9A'}
+}
+
+function confirmDelivery(){
+  if(CURR_DELIV===null)return
+  var d=DELIVERIES[CURR_DELIV]
+  d.qty=CURR_QTY;d.price=CURR_PRICE;d.payMethod=CURR_PAY
+  d.sum=CURR_QTY*CURR_PRICE;d.done=true
+  d.doneTime=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})
+  var c=null,j
+  for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
+  if(c&&API){
+    api('logCall',{
+      clientId:d.clientId,clientName:c.name,phone:c.phone,operator:OP,
+      status:'delivery',
+      note:'Yetkazildi: '+d.qty+' butilka, '+d.sum.toLocaleString()+' som, '+(d.payMethod==='cash'?'Naqd':d.payMethod==='trans'?'Click/Payme':'Predoplata')
+    },function(data,err){toast(data&&data.success?'Saqlandi ✅':'Lokal saqlandi')})
+  }
+  $('deliv-modal').className='mo'
+  renderCourier()
+  toast('Yetkazildi! '+d.sum.toLocaleString()+' som ✅')
+}
+
+function assignDelivery(clientId,clientName){
+  var exists=DELIVERIES.find(function(d){return String(d.clientId)===String(clientId)})
+  if(exists){toast('Bu mijoz allaqachon royhatda!');return}
+  var isPre=false
+  for(var j=0;j<D.length;j++){if(String(D[j].id)===String(clientId)){isPre=D[j].predoplata==='yes';break}}
+  DELIVERIES.push({clientId:clientId,qty:1,price:13000,payMethod:isPre?'pre':'cash',sum:13000,done:false})
+  renderCourier()
+  toast(clientName+' yetkazish royhatiga qoshildi 🚚')
+}
+
+// ═══ NAV ═══
+function showSc(n){
+  document.querySelectorAll('.sc').forEach(function(s){s.className='sc'})
+  document.querySelectorAll('.ni').forEach(function(x){x.className='ni'})
+  $('sc-'+n).className='sc on'
+  var ni=$('ni-'+n);if(ni)ni.className='ni on'
+  var t={home:'Bosh sahifa',clients:'Mijozlar',courier:'Yetkazish',map:'Xarita',profile:'Sozlamalar'}
+  $('tbs').textContent=t[n]||''
+  if(n==='clients'){if(!D.length&&!LOADING)loadClients();else renderC(true)}
+  if(n==='map')mapList()
+  if(n==='courier'){renderCourier()}
+}
+
+function setRole(r){
+  ROLE=r
+  $('pav').textContent=r==='op'?'📞':'🚚'
+  $('pnm').textContent=OP||(r==='op'?'Operator':'Kuryer')
+  $('prl').textContent=r==='op'?'Qongiroqlar bolimi':'Yetkazib berish'
+  var nc=$('ni-clients'),nm=$('ni-map')
+  if(r==='op'){
+    if(nc)nc.style.display='flex'
+    if(nm)nm.style.display='flex'
+    showSc('home')
+  } else {
+    if(nc)nc.style.display='none'
+    if(nm)nm.style.display='flex'
+    showSc('courier')
+    renderCourier()
+  }
+  toast(r==='op'?'Operator rejimi ✅':'Kuryer rejimi 🚚')
+}
+
+// ═══ INIT ═══
+
+// ═══ LOGIN ═══
+var COURIER_ZONE = 0;
+
+// Parollar — operator va kuryerlar
+var USERS = [
+  {pass:'6001113', role:'op', num:1, name:'Operator 1'},
+  {pass:'6041113', role:'op', num:2, name:'Operator 2'},
+  {pass:'2261001', role:'op', num:3, name:'Operator 3'},
+  {pass:'Shermat', role:'co', num:1, name:'Kuryer 1 — Shermat'},
+  {pass:'shermat', role:'co', num:1, name:'Kuryer 1 — Shermat'},
+  {pass:'Mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
+  {pass:'mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
+];
+
+function initLogin(){
+  var savedRole = localStorage.getItem('aq_role');
+  var savedNum  = localStorage.getItem('aq_num');
+  if(savedRole && savedNum){
+    applyLogin(savedRole, parseInt(savedNum));
+    return;
+  }
+  var ls = document.getElementById('login-screen');
+  if(ls) ls.style.display = 'flex';
+
+  var inp = document.getElementById('login-pass');
+  var btn = document.getElementById('login-btn');
+
+  function doLogin(){
+    var pass = (inp.value||'').trim();
+    var user = null;
+    for(var i=0;i<USERS.length;i++){
+      if(USERS[i].pass === pass){user=USERS[i];break;}
+    }
+    if(!user){
+      document.getElementById('login-err').textContent = 'Parol notogri! Qayta urinib koring.';
+      inp.value='';
+      inp.focus();
+      return;
+    }
+    document.getElementById('login-err').textContent = '';
+    localStorage.setItem('aq_role', user.role);
+    localStorage.setItem('aq_num',  user.num);
+    localStorage.setItem('aq_name', user.name);
+    applyLogin(user.role, user.num, user.name);
+  }
+
+  btn.addEventListener('click', doLogin);
+  inp.addEventListener('keydown', function(e){if(e.key==='Enter')doLogin();});
+  setTimeout(function(){if(inp)inp.focus();}, 300);
+}
+
+function applyLogin(role, num, name){
+  var ls = document.getElementById('login-screen');
+  if(ls) ls.style.display = 'none';
+
+  ROLE = role;
+  var savedName = name || localStorage.getItem('aq_name') || (role==='op'?'Operator '+num:'Kuryer '+num);
+  OP = savedName;
+  localStorage.setItem('aq_op', OP);
+
+  var pav=$('pav'),pnm=$('pnm'),prl=$('prl');
+  if(pav)pav.textContent=role==='op'?'📞':'🚚';
+  if(pnm)pnm.textContent=OP;
+  if(prl)prl.textContent=role==='op'?'Qongiroqlar bolimi':'Yetkazib berish';
+
+  var nc=$('ni-clients'),nm=$('ni-map');
+  if(role==='op'){
+    if(nc)nc.style.display='flex';
+    if(nm)nm.style.display='flex';
+    showSc('home');
+  } else {
+    COURIER_ZONE=num;
+    if(nc)nc.style.display='none';
+    if(nm)nm.style.display='flex';
+    showSc('courier');
+  }
+}
+
+function logout(){
+  localStorage.removeItem('aq_role');
+  localStorage.removeItem('aq_num');
+  localStorage.removeItem('aq_op');
+  localStorage.removeItem('aq_name');
+  ROLE='op'; DELIVERIES=[]; BOT_TAKEN=0;
+  var ls=document.getElementById('login-screen');
+  if(ls){ls.style.display='flex';}
+  var inp=document.getElementById('login-pass');
+  if(inp){inp.value='';setTimeout(function(){inp.focus();},300);}
+  document.getElementById('login-err').textContent='';
+}
+
+window.addEventListener('DOMContentLoaded',function(){
+  initLogin();
+  API=localStorage.getItem('aq_api')||'https://script.google.com/macros/s/AKfycbwmOLEw1OQ_0N16Qs2iQHfxSV4lHDClJoCRfYLH1h0CFm1fDZPURS4fi3_jA60YFwET/exec'
+  OP=localStorage.getItem('aq_op')||'Operator'
+  if(API){$('api-url').value=API;$('sdot').className='sdot on'}
+  $('op-name').value=OP;$('pnm').textContent=OP
+
+  // Nav
+  $('ni-home').addEventListener('click',function(){showSc('home')})
+  $('ni-clients').addEventListener('click',function(){showSc('clients')})
+  $('ni-courier').addEventListener('click',function(){showSc('courier')})
+  $('ni-map').addEventListener('click',function(){showSc('map')})
+  $('ni-profile').addEventListener('click',function(){showSc('profile')})
+  $('prof-btn').addEventListener('click',function(){showSc('profile')})
+  $('sync-btn').addEventListener('click',function(){loadClients();syncStats()})
+  $('gmap-btn').addEventListener('click',function(){window.open('https://www.google.com/maps','_blank')})
+
+  // Filters
+  $('fpills').addEventListener('click',function(e){
+    var p=e.target.closest('.pill');if(!p)return
+    $('fpills').querySelectorAll('.pill').forEach(function(x){x.className='pill'})
+    p.className='pill on';CF=p.dataset.f;renderC(true)
+  })
+  $('sinp').addEventListener('input',function(){renderC(true)})
+  $('lmbtn').addEventListener('click',function(){OF+=PG;renderC(false)})
+
+  // Modal
+  $('modal').addEventListener('click',function(e){if(e.target===this)this.className='mo'})
+  $('edit-btn').addEventListener('click',function(){setEdit($('view-sec').style.display!=='none')})
+  $('save-edit').addEventListener('click',saveEdit)
+  $('cancel-edit').addEventListener('click',function(){setEdit(false)})
+  $('msave').addEventListener('click',saveCall)
+  $('m-assign').addEventListener('click',function(){
+    if(!CID)return
+    var c=null,i
+    for(i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+    if(!c)return
+    assignDelivery(CID,c.name)
+    $('modal').className='mo'
+  })
+
+  // Delivery modal
+  $('deliv-modal').addEventListener('click',function(e){if(e.target===this)this.className='mo'})
+  var on=function(id,ev,fn){var el=$(id);if(el)el.addEventListener(ev,fn)}
+  on('qty-minus','click',function(){if(CURR_QTY>1){CURR_QTY--;updateDelivTotal()}})
+  on('qty-plus','click',function(){CURR_QTY++;updateDelivTotal()})
+  on('price-13','click',function(){CURR_PRICE=13000;updateDelivTotal()})
+  on('price-15','click',function(){CURR_PRICE=15000;updateDelivTotal()})
+  on('pay-cash','click',function(){CURR_PAY='cash';updatePayBtns()})
+  on('pay-trans','click',function(){CURR_PAY='trans';updatePayBtns()})
+  on('pay-pre','click',function(){CURR_PAY='pre';updatePayBtns()})
+  on('dm-done','click',confirmDelivery)
+
+  // Bottle counter
+  on('bot-minus','click',function(){var inp=$('bot-input');if(inp&&parseInt(inp.value)>0)inp.value=parseInt(inp.value)-1})
+  on('bot-plus','click',function(){var inp=$('bot-input');if(inp)inp.value=parseInt(inp.value||0)+1})
+  on('bot-save','click',function(){
+    var inp=$('bot-input');if(!inp)return
+    BOT_TAKEN=parseInt(inp.value)||0
+    if(BOT_TAKEN>0){toast('Butilkalar saqlandi: '+BOT_TAKEN+' ta');updateBotStats()}
+    else toast('Miqdor kiriting!')
+  })
+
+  // API settings
+  $('save-api').addEventListener('click',function(){
+    var url=$('api-url').value.trim(),name=$('op-name').value.trim()||'Operator'
+    if(!url){toast('URL kiritilmagan!');return}
+    API=url;OP=name
+    localStorage.setItem('aq_api',url);localStorage.setItem('aq_op',name)
+    $('pnm').textContent=name;$('sdot').className='sdot on'
+    loadClients();syncStats()
+    toast('Saqlandi! Yuklanmoqda...')
+  })
+  $('test-api').addEventListener('click',function(){
+    if(!API){toast('URL kiriting!');return}
+    $('api-st').innerHTML='<span style="color:var(--sub)">Test...</span>'
+    api('getStats',{},function(data,err){
+      if(data&&!data.error){
+        $('api-st').innerHTML='<span style="color:var(--green)">✅ Ulandi! Mijozlar: '+data.totalClients+', Bugun: '+data.todayCalls+'</span>'
+        $('sdot').className='sdot on'
+      } else {
+        $('api-st').innerHTML='<span style="color:var(--red)">❌ '+(err||(data&&data.error))+'</span>'
+      }
+    })
+  })
+
+  // Roles
+  $('role-op').addEventListener('click',function(){setRole('op')})
+  $('role-co').addEventListener('click',function(){setRole('co')})
+
+  // Init
+  $('tbs').textContent='Bosh sahifa'
+  loadClients()
+  if(API)syncStats()
+})
+</script>
+</body>
+</html>
