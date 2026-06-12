@@ -27,7 +27,7 @@ function handle(e) {
     else if (action === 'takeNextClient') result = takeNextClient(data.operatorName);
     else if (action === 'setClientStatus')result = setClientStatus(data.clientId, data.status, data.operatorName);
     else if (action === 'addDelivery')      result = addDelivery(data);
-    else if (action === 'getDeliveries')    result = getDeliveries(data.deliveryDate);
+    else if (action === 'getDeliveries')    result = getDeliveries(data.deliveryDate, data.courier);
     else if (action === 'completeDelivery') result = completeDelivery(data.deliveryId, data.qty, data.price, data.sum, data.payMethod);
     else result = {error: 'Unknown action: ' + action};
   } catch(err) {
@@ -348,6 +348,7 @@ function ensureDeliveryCols(sh) {
   var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
   var ddIdx = headers.indexOf('deliveryDate');
   var stIdx = headers.indexOf('status');
+  var crIdx = headers.indexOf('courier');
 
   if (ddIdx < 0) {
     lastCol++;
@@ -359,8 +360,38 @@ function ensureDeliveryCols(sh) {
     sh.getRange(1, lastCol).setValue('status').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
     stIdx = lastCol - 1;
   }
+  if (crIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('courier').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    crIdx = lastCol - 1;
+  }
 
-  return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1};
+  return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1, courierCol: crIdx + 1};
+}
+
+// Normalizes a courier-zone value so "K1"/"k1"/"1"/1 all compare equal.
+function normCourier(v) {
+  v = String(v == null ? '' : v).trim();
+  if (v.charAt(0) === 'K' || v.charAt(0) === 'k') v = v.slice(1);
+  return v;
+}
+
+// Looks up the "courier" zone of a client in Mijozlar by id.
+function lookupClientCourier(clientId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(CLIENTS_SHEET);
+  if (!sh) return '';
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = headers.indexOf('id');
+  var crIdx = headers.indexOf('courier');
+  if (idIdx < 0 || crIdx < 0) return '';
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]) === String(clientId)) {
+      return normCourier(data[i][crIdx]);
+    }
+  }
+  return '';
 }
 
 // ── DELIVERY: ADD ────────────────────────────────────────────
@@ -396,6 +427,10 @@ function addDelivery(data) {
     set('deliveryDate', data.deliveryDate || dateStr);
     set('status', 'pending');
 
+    var courier = normCourier(data.courier);
+    if (!courier) courier = lookupClientCourier(data.clientId);
+    set('courier', courier);
+
     sh.appendRow(row);
     return {success: true, id: deliveryId};
   } finally {
@@ -404,8 +439,11 @@ function addDelivery(data) {
 }
 
 // ── DELIVERY: GET PENDING ────────────────────────────────────
-// Returns all pending deliveries, optionally filtered by deliveryDate.
-function getDeliveries(deliveryDate) {
+// Returns pending deliveries, optionally filtered by deliveryDate and/or
+// courier zone. If courier is empty (operator/admin), all pending
+// deliveries are returned. Deliveries with no courier zone set (legacy
+// rows) are visible to every courier.
+function getDeliveries(deliveryDate, courier) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(ORDERS_SHEET);
   if (!sh) return {deliveries: []};
@@ -418,6 +456,9 @@ function getDeliveries(deliveryDate) {
   var headers = data[0];
   var statusIdx = headers.indexOf('status');
   var ddIdx = headers.indexOf('deliveryDate');
+  var crIdx = headers.indexOf('courier');
+
+  var courierFilter = normCourier(courier);
 
   var deliveries = [];
   for (var i = 1; i < data.length; i++) {
@@ -425,6 +466,10 @@ function getDeliveries(deliveryDate) {
     if (!row[0]) continue;
     if (row[statusIdx] !== 'pending') continue;
     if (deliveryDate && String(row[ddIdx]) !== String(deliveryDate)) continue;
+    if (courierFilter) {
+      var rowCourier = normCourier(row[crIdx]);
+      if (rowCourier && rowCourier !== courierFilter) continue;
+    }
     var obj = {};
     for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
     deliveries.push(obj);
