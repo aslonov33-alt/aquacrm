@@ -110,6 +110,15 @@ textarea.fin{resize:none}
 .total-lbl{font-size:12px;opacity:.8;margin-top:2px}
 .c-summary{background:#E8F5E9;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:4px}
 
+/* QUEUE */
+.card.taken{opacity:.5}
+.next-btn{background:linear-gradient(135deg,var(--blue3),#00ACC1);color:#fff;border-radius:var(--r);padding:16px;text-align:center;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.09);cursor:pointer}
+.next-btn .nb-t{font-size:16px;font-weight:800}
+.next-btn .nb-s{font-size:11px;opacity:.85;margin-top:3px}
+.q-box{background:#F0F4F8;border-radius:10px;padding:10px 12px;margin-bottom:12px}
+.q-box .q-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.q-warn{background:#FFF3E0;color:var(--orange);border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;margin-bottom:8px}
+
 /* LOGIN SCREEN */
 .login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0D47A1,#1976D2,#00ACC1);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
 .login-logo{font-size:64px;margin-bottom:12px}
@@ -164,6 +173,10 @@ textarea.fin{resize:none}
 
 <!-- HOME -->
 <div class="sc on" id="sc-home">
+  <div class="next-btn tap" id="next-client-btn">
+    <div class="nb-t">🎯 Keyingi mijozni olish</div>
+    <div class="nb-s">Navbatdan mijoz tayinlanadi</div>
+  </div>
   <div class="g3">
     <div class="sc-card"><div class="sn" style="color:var(--red)" id="s1">-</div><div class="sl">Shoshilinch</div></div>
     <div class="sc-card"><div class="sn" style="color:var(--orange)" id="s2">-</div><div class="sl">Diqqat</div></div>
@@ -297,6 +310,20 @@ textarea.fin{resize:none}
       <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap" id="mtags"></div>
     </div>
     <div class="mbd">
+
+      <!-- QUEUE -->
+      <div class="q-box" id="q-box">
+        <div class="q-hd">
+          <span style="font-size:12px;font-weight:700;color:var(--sub)">📋 Navbat holati</span>
+          <span id="q-status-badge"></span>
+        </div>
+        <div id="q-taken-warn" class="q-warn" style="display:none"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn bg2 bs" id="q-called" style="flex:1">✅ Обзвонен</button>
+          <button class="btn bp bs" id="q-order" style="flex:1">📦 Заказ</button>
+          <button class="btn bo bs" id="q-callback" style="flex:1">🔄 Перезвонить</button>
+        </div>
+      </div>
 
       <!-- VIEW -->
       <div id="view-sec">
@@ -492,6 +519,8 @@ function processD(){
     c.days=parseInt(c.days)||0
     c.debt=parseInt(c.debt)||0
     c.orders=parseInt(c.orders)||0
+    c.status=c.status||''
+    c.takenBy=c.takenBy||''
     if(c.days>365)c.priority='urgent'
     else if(c.days>180||c.debt>0)c.priority='warning'
     else c.priority='ok'
@@ -547,6 +576,14 @@ function stag(s){
     refused:'<span class="tag gr">⛔</span>',delivery:'<span class="tag b">🚚</span>'}
   return m[s]||''
 }
+function qstag(s){
+  var m={'Взят':'<span class="tag gr">🔒 Band</span>','Обзвонен':'<span class="tag g">✅ Obzvonen</span>',
+    'Заказ':'<span class="tag b">📦 Buyurtma</span>','Перезвонить':'<span class="tag or">🔄 Qayta qongiroq</span>'}
+  return m[s]||''
+}
+function isLocked(c){
+  return c.status==='Взят'&&c.takenBy&&c.takenBy.indexOf(OP+' (')!==0
+}
 
 function top5(){
   var lst=[],i
@@ -584,9 +621,16 @@ function renderC(reset){
     var pre=c.predoplata==='yes'||c.predoplata===true
     var dt=c.days?'<span class="tag '+(c.days>365?'r':c.days>180?'or':'y')+'">'+c.days+' kun</span>':''
     var k=c.courier?'<span class="tag gr">K'+c.courier+'</span>':''
-    return '<div class="card tap" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+E(c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+'</div></div></div>'
+    var locked=isLocked(c)
+    var qt=c.status?qstag(c.status):''
+    return '<div class="card tap'+(locked?' taken':'')+'" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+E(c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+qt+'</div></div></div>'
   }).join('')
-  el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){openC(this.dataset.cid)})})
+  el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){
+    var c=null,cid=this.dataset.cid
+    for(var i=0;i<D.length;i++){if(String(D[i].id)===String(cid)){c=D[i];break}}
+    if(c&&isLocked(c)){toast('🔒 Band: '+c.takenBy);return}
+    openC(cid)
+  })})
   $('cinfo').textContent='Korsatilmoqda: '+sl.length+' / '+FL.length
   $('lmbtn').style.display=sl.length<FL.length?'block':'none'
 }
@@ -640,9 +684,54 @@ function openC(id){
   // Call
   $('mst').value=s.status||'';$('mnote').value=''
   $('modal').className='mo on'
+  renderQueueBox(c)
   // Load histories
   loadCallHist(id)
   loadOrderHist(id,c,pre)
+}
+
+// ═══ QUEUE ═══
+function renderQueueBox(c){
+  $('q-status-badge').innerHTML=c.status?qstag(c.status):'<span class="tag gr">Bosh</span>'
+  var warn=$('q-taken-warn')
+  if(isLocked(c)){
+    warn.style.display='block'
+    warn.textContent='⚠️ Bu mijozni '+c.takenBy+' band qilgan'
+  }else{
+    warn.style.display='none'
+  }
+}
+
+function nextClient(){
+  if(!API){toast('Avval Apps Script URL kiriting!');return}
+  var btn=$('next-client-btn')
+  btn.style.opacity='.6'
+  api('takeNextClient',{operatorName:OP},function(data,err){
+    btn.style.opacity='1'
+    if(err||!data||data.error){toast('Xatolik: '+(err||data.error));return}
+    if(!data.success){toast(data.message||'Navbat boshi: mijoz topilmadi');return}
+    var c=data.client
+    var idx=-1
+    for(var i=0;i<D.length;i++){if(String(D[i].id)===String(c.id)){idx=i;break}}
+    if(idx>=0){D[idx].status=c.status;D[idx].takenBy=c.takenBy}
+    else{c.days=parseInt(c.days)||0;c.debt=parseInt(c.debt)||0;c.orders=parseInt(c.orders)||0;D.unshift(c);processD()}
+    renderAll()
+    openC(c.id)
+    toast('🎯 Yangi mijoz tayinlandi')
+  })
+}
+
+function setQueueStatus(status){
+  if(!CID)return
+  api('setClientStatus',{clientId:CID,status:status,operatorName:OP},function(data,err){
+    if(err||!data||data.error){toast('Xatolik: '+(err||(data&&data.error)));return}
+    var c=null
+    for(var i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+    if(c){c.status=status;c.takenBy=data.takenBy||c.takenBy}
+    toast('✅ Holat saqlandi: '+status)
+    $('modal').className='mo'
+    renderAll()
+  })
 }
 
 function setEdit(on){
@@ -1023,7 +1112,7 @@ function logout(){
 
 window.addEventListener('DOMContentLoaded',function(){
   initLogin();
-  API=localStorage.getItem('aq_api')||'https://script.google.com/macros/s/AKfycbwmOLEw1OQ_0N16Qs2iQHfxSV4lHDClJoCRfYLH1h0CFm1fDZPURS4fi3_jA60YFwET/exec'
+  API=localStorage.getItem('aq_api')||'https://script.google.com/macros/s/AKfycbyU46lMJLa3F5_UB848tloPadSi325m4drcada-Nv7luj3wcCfQsGPlfUNvb0VGU4Q/exec'
   OP=localStorage.getItem('aq_op')||'Operator'
   if(API){$('api-url').value=API;$('sdot').className='sdot on'}
   $('op-name').value=OP;$('pnm').textContent=OP
@@ -1061,6 +1150,12 @@ window.addEventListener('DOMContentLoaded',function(){
     assignDelivery(CID,c.name)
     $('modal').className='mo'
   })
+
+  // Queue
+  $('next-client-btn').addEventListener('click',nextClient)
+  $('q-called').addEventListener('click',function(){setQueueStatus('Обзвонен')})
+  $('q-order').addEventListener('click',function(){setQueueStatus('Заказ')})
+  $('q-callback').addEventListener('click',function(){setQueueStatus('Перезвонить')})
 
   // Delivery modal
   $('deliv-modal').addEventListener('click',function(e){if(e.target===this)this.className='mo'})
