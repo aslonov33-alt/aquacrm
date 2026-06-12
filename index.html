@@ -230,8 +230,13 @@ textarea.fin{resize:none}
     <div class="sc-card"><div class="sn" style="color:var(--orange);font-size:18px" id="bot-left">0</div><div class="sl">Qoldi</div></div>
     <div class="sc-card"><div class="sn" style="color:var(--purple);font-size:18px" id="bot-pre">0</div><div class="sl">Predoplata</div></div>
   </div>
+  <div class="fr" id="cf-pills">
+    <div class="pill on" data-cf="today">Bugun</div>
+    <div class="pill" data-cf="tomorrow">Ertaga</div>
+    <div class="pill" data-cf="all">Hammasi</div>
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <div style="font-size:16px;font-weight:800">🚚 Bugungi yetkazishlar</div>
+    <div style="font-size:16px;font-weight:800">🚚 Yetkazishlar</div>
     <span class="tag g" id="c-done-count">0 / 0</span>
   </div>
   <div class="c-summary">
@@ -378,6 +383,19 @@ textarea.fin{resize:none}
           <button class="btn bp" id="msave" style="flex:1">✅ Saqlash</button>
           <button class="btn" id="m-assign" style="background:#E8F5E9;color:#1B5E20;border:2px solid #2E7D32;padding:8px 12px;font-size:13px">🚚</button>
         </div>
+        <div class="q-box" id="deliv-assign-box" style="display:none">
+          <div class="q-hd">
+            <span style="font-size:12px;font-weight:700;color:var(--sub)">🚚 Yetkazish sanasini tanlang</span>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="btn bg2 bs" id="da-today" style="flex:1">Bugun</button>
+            <button class="btn bo bs" id="da-tomorrow" style="flex:1">Ertaga</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <input class="fin" type="date" id="da-date" style="flex:1;margin:0">
+            <button class="btn bp bs" id="da-custom">Tanlash</button>
+          </div>
+        </div>
       </div>
 
       <!-- CALL HISTORY -->
@@ -458,13 +476,22 @@ textarea.fin{resize:none}
 var API='', OP='Operator', ROLE='op';
 var D=[], ST={}, CF='all', CID=null, PG=40, OF=0, FL=[];
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
-var BOT_TAKEN=0;
+var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
 
 // ═══ UTILS ═══
 function $(i){return document.getElementById(i);}
 function E(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
 function toast(m){var t=$('toast');t.textContent=m;t.className='toast on';clearTimeout(t._t);t._t=setTimeout(function(){t.className='toast'},2500)}
 function fmtSum(n){return n?(parseInt(n)||0).toLocaleString()+' som':'0 som'}
+function findClient(id){
+  for(var i=0;i<D.length;i++){if(String(D[i].id)===String(id))return D[i]}
+  return null
+}
+function pad2(n){return n<10?'0'+n:''+n}
+function fmtDateUz(d){return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()}
+function todayUz(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return fmtDateUz(d)}
+function todayISO(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())}
+function inputDateToUz(val){var p=(val||'').split('-');return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):''}
 
 // ═══ API ═══
 function api(action,data,cb){
@@ -562,7 +589,7 @@ function stats(){
   $('pp3').textContent=wn;$('pp4').textContent=pre;
 }
 
-function renderAll(){stats();top5();renderC(true);mapList()}
+function renderAll(){stats();top5();renderC(true);mapList();if(ROLE==='co')renderCourier()}
 
 // ═══ TAGS ═══
 function ptag(c){
@@ -683,6 +710,7 @@ function openC(id){
   $('e-note').value=c.note||''
   // Call
   $('mst').value=s.status||'';$('mnote').value=''
+  $('deliv-assign-box').style.display='none';CURR_ASSIGN=null
   $('modal').className='mo on'
   renderQueueBox(c)
   // Load histories
@@ -852,8 +880,8 @@ function saveEdit(){
 
 // ═══ COURIER ═══
 function updateBotStats(){
-  var del=DELIVERIES.filter(function(d){return d.done&&d.payMethod!=='pre'}).reduce(function(s,d){return s+d.qty},0)
-  var pre=DELIVERIES.filter(function(d){return d.done&&d.payMethod==='pre'}).reduce(function(s,d){return s+d.qty},0)
+  var del=DONE_TODAY.filter(function(d){return d.payMethod!=='pre'}).reduce(function(s,d){return s+d.qty},0)
+  var pre=DONE_TODAY.filter(function(d){return d.payMethod==='pre'}).reduce(function(s,d){return s+d.qty},0)
   var left=BOT_TAKEN-del-pre
   var el;
   el=$('bot-taken');if(el)el.textContent=BOT_TAKEN
@@ -868,20 +896,17 @@ function renderCourier(){
   updateBotStats()
   // Sort by address
   DELIVERIES.sort(function(a,b){
-    var ca=null,cb_=null,j
-    for(j=0;j<D.length;j++){if(String(D[j].id)===String(a.clientId))ca=D[j]}
-    for(j=0;j<D.length;j++){if(String(D[j].id)===String(b.clientId))cb_=D[j]}
+    var ca=findClient(a.clientId),cb_=findClient(b.clientId)
     var aa=ca?(ca.addrNorm||ca.addr||''):'';var ab=cb_?(cb_.addrNorm||cb_.addr||''):''
     return aa.localeCompare(ab,'uz')
   })
   var el=$('courier-list')
-  var done=DELIVERIES.filter(function(d){return d.done})
-  $('c-done-count').textContent=done.length+' / '+DELIVERIES.length
-  var bc=DELIVERIES.filter(function(d){return !d.done}).length
+  $('c-done-count').textContent=DONE_TODAY.length+' / '+(DONE_TODAY.length+DELIVERIES.length)
+  var bc=DELIVERIES.length
   $('bc').textContent=bc;$('bc').style.display=bc?'flex':'none'
   var tSum=0,cSum=0,tSm=0,pSm=0
-  DELIVERIES.forEach(function(d){
-    if(d.done){tSum+=d.sum;if(d.payMethod==='cash')cSum+=d.sum;else if(d.payMethod==='trans')tSm+=d.sum;else if(d.payMethod==='pre')pSm+=d.sum}
+  DONE_TODAY.forEach(function(d){
+    tSum+=d.sum;if(d.payMethod==='cash')cSum+=d.sum;else if(d.payMethod==='trans')tSm+=d.sum;else if(d.payMethod==='pre')pSm+=d.sum
   })
   var e2;
   e2=$('c-total-sum');if(e2)e2.textContent=tSum.toLocaleString()+' som'
@@ -889,26 +914,25 @@ function renderCourier(){
   e2=$('c-trans-sum');if(e2)e2.textContent=tSm.toLocaleString()+' som'
   e2=$('c-pre-sum');if(e2)e2.textContent=pSm.toLocaleString()+' som'
   if(!DELIVERIES.length){
-    el.innerHTML='<div style="text-align:center;color:var(--sub);padding:30px;font-size:13px">Bugun yetkazish yoq.<br>Operator tomonidan tayinlanadi.</div>'
+    el.innerHTML='<div style="text-align:center;color:var(--sub);padding:30px;font-size:13px">Yetkazish yoq.<br>Operator tomonidan tayinlanadi.</div>'
     return
   }
   el.innerHTML=DELIVERIES.map(function(d,i){
-    var c=null,j
-    for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
-    if(!c)return ''
-    var pre=c.predoplata==='yes'||c.predoplata===true
-    var pm=d.payMethod==='cash'?'💵 Naqd':d.payMethod==='trans'?'📱 Click':'🟣 Predoplata'
-    var bg=d.done?'opacity:.7':'';
-    return '<div class="courier-card" style="'+bg+'" data-didx="'+i+'"><div class="courier-header">'+(pre?'<div style="position:absolute;right:10px;top:8px;font-size:10px;background:rgba(255,255,255,.2);padding:2px 6px;border-radius:8px">🟣 PREDOPLATA</div>':'')+
+    var c=findClient(d.clientId)
+    var name=c?c.name:(d.clientName||'—')
+    var addr=c?(c.addrNorm||c.addr||'—'):'—'
+    var phone=c?(c.phone||''):''
+    var debt=c?(c.debt||0):0
+    var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
+    return '<div class="courier-card" data-didx="'+i+'"><div class="courier-header">'+(pre?'<div style="position:absolute;right:10px;top:8px;font-size:10px;background:rgba(255,255,255,.2);padding:2px 6px;border-radius:8px">🟣 PREDOPLATA</div>':'')+
       '<div class="courier-num">'+(i+1)+'</div>'+
-      '<div style="flex:1;margin-left:10px"><div style="font-size:15px;font-weight:700">'+E(c.name)+'</div><div style="font-size:11px;opacity:.8">'+E(c.phone||'')+'</div></div>'+
-      (d.done?'<span class="tag g">✅</span>':'<span class="tag or">⏳</span>')+
+      '<div style="flex:1;margin-left:10px"><div style="font-size:15px;font-weight:700">'+E(name)+'</div><div style="font-size:11px;opacity:.8">'+E(phone)+'</div></div>'+
+      '<span class="tag or">⏳</span>'+
       '</div><div class="courier-body">'+
-      '<div class="courier-row"><span style="color:var(--sub)">📍 Manzil</span><span style="font-weight:600;text-align:right;max-width:60%;font-size:12px">'+E(c.addrNorm||c.addr||'—')+'</span></div>'+
-      '<div class="courier-row"><span style="color:var(--sub)">🫙 Butilka</span><span style="font-weight:700;color:var(--blue)">'+d.qty+' ta</span></div>'+
-      '<div class="courier-row"><span style="color:var(--sub)">💰 Summa</span><span style="font-weight:700;color:#1B5E20">'+d.sum.toLocaleString()+' som</span></div>'+
-      '<div class="courier-row"><span style="color:var(--sub)">📱 Tolash</span><span style="font-weight:600">'+pm+'</span></div>'+
-      (c.debt>0?'<div class="courier-row"><span style="color:var(--red)">⚠️ Qarz</span><span style="font-weight:700;color:var(--red)">'+c.debt.toLocaleString()+' som</span></div>':'')+
+      '<div class="courier-row"><span style="color:var(--sub)">📍 Manzil</span><span style="font-weight:600;text-align:right;max-width:60%;font-size:12px">'+E(addr)+'</span></div>'+
+      '<div class="courier-row"><span style="color:var(--sub)">🫙 Butilka</span><span style="font-weight:700;color:var(--blue)">'+(d.qty||1)+' ta</span></div>'+
+      '<div class="courier-row"><span style="color:var(--sub)">📅 Sana</span><span style="font-weight:600">'+E(d.deliveryDate||'')+'</span></div>'+
+      (debt>0?'<div class="courier-row"><span style="color:var(--red)">⚠️ Qarz</span><span style="font-weight:700;color:var(--red)">'+debt.toLocaleString()+' som</span></div>':'')+
       '</div></div>'
   }).join('')
   el.querySelectorAll('[data-didx]').forEach(function(el){
@@ -916,21 +940,34 @@ function renderCourier(){
   })
 }
 
+function loadDeliveries(){
+  if(!API){renderCourier();return}
+  var filterDate=null
+  if(COURIER_FILTER==='today')filterDate=todayUz()
+  else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
+  api('getDeliveries',{deliveryDate:filterDate},function(data,err){
+    if(data&&data.deliveries){
+      DELIVERIES=data.deliveries.map(function(d){
+        return {id:d.id,clientId:d.clientId,clientName:d.clientName,qty:parseInt(d.qty)||1,deliveryDate:d.deliveryDate||''}
+      })
+    } else DELIVERIES=[]
+    renderCourier()
+  })
+}
+
 function openDelivery(idx){
   var d=DELIVERIES[idx]
-  var c=null,j
-  for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
-  if(!c)return
-  CURR_DELIV=idx;CURR_QTY=d.qty||1;CURR_PRICE=d.price||13000;CURR_PAY=d.payMethod||'cash'
-  var pre=c.predoplata==='yes'||c.predoplata===true
-  $('dm-name').textContent=c.name
-  $('dm-addr').textContent='📍 '+(c.addrNorm||c.addr||'—')
-  $('dm-tel').textContent=c.phone||'—';$('dm-tel').href=c.phone?'tel:'+c.phone:'#'
-  $('dm-call').href=c.phone?'tel:'+c.phone:'#'
-  var maddr=c.addrMaps||(c.addrNorm||c.addr||'')+', Buxoro, Uzbekistan'
+  var c=findClient(d.clientId)
+  CURR_DELIV=idx;CURR_QTY=d.qty||1;CURR_PRICE=13000;CURR_PAY='cash'
+  var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
+  $('dm-name').textContent=c?c.name:(d.clientName||'—')
+  $('dm-addr').textContent='📍 '+(c?(c.addrNorm||c.addr||'—'):'—')
+  $('dm-tel').textContent=c&&c.phone?c.phone:'—';$('dm-tel').href=c&&c.phone?'tel:'+c.phone:'#'
+  $('dm-call').href=c&&c.phone?'tel:'+c.phone:'#'
+  var maddr=(c&&c.addrMaps)||((c?(c.addrNorm||c.addr||''):'')+', Buxoro, Uzbekistan')
   $('dm-map').href='https://www.google.com/maps/search/'+encodeURIComponent(maddr)
-  $('dm-debt').textContent=c.debt>0?c.debt.toLocaleString()+' som ⚠️':'Qarz yoq ✅'
-  $('dm-debt').style.color=c.debt>0?'var(--red)':'var(--green)'
+  $('dm-debt').textContent=c&&c.debt>0?c.debt.toLocaleString()+' som ⚠️':'Qarz yoq ✅'
+  $('dm-debt').style.color=c&&c.debt>0?'var(--red)':'var(--green)'
   if(pre){$('dm-pre-row').style.display='flex';$('dm-pre-val').textContent='Ha — predoplata'}
   else $('dm-pre-row').style.display='none'
   // Auto-set predoplata payment
@@ -958,31 +995,45 @@ function updatePayBtns(){
 function confirmDelivery(){
   if(CURR_DELIV===null)return
   var d=DELIVERIES[CURR_DELIV]
-  d.qty=CURR_QTY;d.price=CURR_PRICE;d.payMethod=CURR_PAY
-  d.sum=CURR_QTY*CURR_PRICE;d.done=true
-  d.doneTime=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})
-  var c=null,j
-  for(j=0;j<D.length;j++){if(String(D[j].id)===String(d.clientId)){c=D[j];break}}
+  var qty=CURR_QTY,price=CURR_PRICE,payMethod=CURR_PAY,sum=CURR_QTY*CURR_PRICE
+  var c=findClient(d.clientId)
+  $('deliv-modal').className='mo'
+  api('completeDelivery',{deliveryId:d.id,qty:qty,price:price,sum:sum,payMethod:payMethod},function(data,err){
+    if(data&&data.success){
+      var idx=DELIVERIES.indexOf(d)
+      if(idx>=0)DELIVERIES.splice(idx,1)
+      DONE_TODAY.push({clientId:d.clientId,qty:qty,price:price,sum:sum,payMethod:payMethod,doneTime:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})})
+      CURR_DELIV=null
+      renderCourier()
+      toast('Yetkazildi! '+sum.toLocaleString()+' som ✅')
+    } else {
+      toast('Xatolik! Internetni tekshiring')
+    }
+  })
   if(c&&API){
     api('logCall',{
       clientId:d.clientId,clientName:c.name,phone:c.phone,operator:OP,
       status:'delivery',
-      note:'Yetkazildi: '+d.qty+' butilka, '+d.sum.toLocaleString()+' som, '+(d.payMethod==='cash'?'Naqd':d.payMethod==='trans'?'Click/Payme':'Predoplata')
-    },function(data,err){toast(data&&data.success?'Saqlandi ✅':'Lokal saqlandi')})
+      note:'Yetkazildi: '+qty+' butilka, '+sum.toLocaleString()+' som, '+(payMethod==='cash'?'Naqd':payMethod==='trans'?'Click/Payme':'Predoplata')
+    })
   }
-  $('deliv-modal').className='mo'
-  renderCourier()
-  toast('Yetkazildi! '+d.sum.toLocaleString()+' som ✅')
 }
 
-function assignDelivery(clientId,clientName){
-  var exists=DELIVERIES.find(function(d){return String(d.clientId)===String(clientId)})
-  if(exists){toast('Bu mijoz allaqachon royhatda!');return}
-  var isPre=false
-  for(var j=0;j<D.length;j++){if(String(D[j].id)===String(clientId)){isPre=D[j].predoplata==='yes';break}}
-  DELIVERIES.push({clientId:clientId,qty:1,price:13000,payMethod:isPre?'pre':'cash',sum:13000,done:false})
-  renderCourier()
-  toast(clientName+' yetkazish royhatiga qoshildi 🚚')
+function addDeliveryRequest(deliveryDate){
+  if(!CURR_ASSIGN)return
+  if(!API){toast('API sozlanmagan!');return}
+  var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
+  api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
+    if(data&&data.success){
+      toast("Yetkazishga qo'shildi 🚚")
+      $('deliv-assign-box').style.display='none'
+      $('modal').className='mo'
+      CURR_ASSIGN=null
+      if(ROLE==='co')loadDeliveries()
+    } else {
+      toast('Xatolik! Qayta urinib koring')
+    }
+  })
 }
 
 // ═══ NAV ═══
@@ -995,7 +1046,7 @@ function showSc(n){
   $('tbs').textContent=t[n]||''
   if(n==='clients'){if(!D.length&&!LOADING)loadClients();else renderC(true)}
   if(n==='map')mapList()
-  if(n==='courier'){renderCourier()}
+  if(n==='courier'){loadDeliveries()}
 }
 
 function setRole(r){
@@ -1012,7 +1063,6 @@ function setRole(r){
     if(nc)nc.style.display='none'
     if(nm)nm.style.display='flex'
     showSc('courier')
-    renderCourier()
   }
   toast(r==='op'?'Operator rejimi ✅':'Kuryer rejimi 🚚')
 }
@@ -1102,7 +1152,7 @@ function logout(){
   localStorage.removeItem('aq_num');
   localStorage.removeItem('aq_op');
   localStorage.removeItem('aq_name');
-  ROLE='op'; DELIVERIES=[]; BOT_TAKEN=0;
+  ROLE='op'; DELIVERIES=[]; DONE_TODAY=[]; BOT_TAKEN=0;
   var ls=document.getElementById('login-screen');
   if(ls){ls.style.display='flex';}
   var inp=document.getElementById('login-pass');
@@ -1111,11 +1161,11 @@ function logout(){
 }
 
 window.addEventListener('DOMContentLoaded',function(){
-  initLogin();
   API=localStorage.getItem('aq_api')||'https://script.google.com/macros/s/AKfycbyU46lMJLa3F5_UB848tloPadSi325m4drcada-Nv7luj3wcCfQsGPlfUNvb0VGU4Q/exec'
   OP=localStorage.getItem('aq_op')||'Operator'
   if(API){$('api-url').value=API;$('sdot').className='sdot on'}
   $('op-name').value=OP;$('pnm').textContent=OP
+  initLogin();
 
   // Nav
   $('ni-home').addEventListener('click',function(){showSc('home')})
@@ -1144,11 +1194,11 @@ window.addEventListener('DOMContentLoaded',function(){
   $('msave').addEventListener('click',saveCall)
   $('m-assign').addEventListener('click',function(){
     if(!CID)return
-    var c=null,i
-    for(i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+    var c=findClient(CID)
     if(!c)return
-    assignDelivery(CID,c.name)
-    $('modal').className='mo'
+    CURR_ASSIGN={clientId:CID,clientName:c.name}
+    var box=$('deliv-assign-box')
+    box.style.display=box.style.display==='none'?'block':'none'
   })
 
   // Queue
@@ -1168,6 +1218,18 @@ window.addEventListener('DOMContentLoaded',function(){
   on('pay-trans','click',function(){CURR_PAY='trans';updatePayBtns()})
   on('pay-pre','click',function(){CURR_PAY='pre';updatePayBtns()})
   on('dm-done','click',confirmDelivery)
+  on('da-today','click',function(){addDeliveryRequest(todayUz())})
+  on('da-tomorrow','click',function(){addDeliveryRequest(todayUz(1))})
+  on('da-custom','click',function(){
+    var val=$('da-date').value
+    if(!val){toast('Sanani tanlang!');return}
+    addDeliveryRequest(inputDateToUz(val))
+  })
+  $('cf-pills').addEventListener('click',function(e){
+    var p=e.target.closest('.pill');if(!p)return
+    $('cf-pills').querySelectorAll('.pill').forEach(function(x){x.className='pill'})
+    p.className='pill on';COURIER_FILTER=p.dataset.cf;loadDeliveries()
+  })
 
   // Bottle counter
   on('bot-minus','click',function(){var inp=$('bot-input');if(inp&&parseInt(inp.value)>0)inp.value=parseInt(inp.value)-1})

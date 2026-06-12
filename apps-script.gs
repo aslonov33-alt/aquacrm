@@ -1,5 +1,5 @@
-// AquaCRM — Google Apps Script Backend v3
-// Обновлено: очередь клиентов (Статус / КтоВзял), защита от одновременного звонка двух операторов
+// AquaCRM — Google Apps Script Backend v4
+// Обновлено: заявки на доставку (Buyurtmalar: deliveryDate / status) хранятся на сервере
 
 var CLIENTS_SHEET = 'Mijozlar';
 var CALLS_SHEET   = 'Qongiroqlar';
@@ -26,6 +26,9 @@ function handle(e) {
     else if (action === 'initSheets')     result = initSheets();
     else if (action === 'takeNextClient') result = takeNextClient(data.operatorName);
     else if (action === 'setClientStatus')result = setClientStatus(data.clientId, data.status, data.operatorName);
+    else if (action === 'addDelivery')      result = addDelivery(data);
+    else if (action === 'getDeliveries')    result = getDeliveries(data.deliveryDate);
+    else if (action === 'completeDelivery') result = completeDelivery(data.deliveryId, data.qty, data.price, data.sum, data.payMethod);
     else result = {error: 'Unknown action: ' + action};
   } catch(err) {
     result = {error: err.toString()};
@@ -66,6 +69,7 @@ function initSheets() {
     os.getRange(1,1,1,ho.length).setValues([ho]).setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
     os.setFrozenRows(1);
   }
+  ensureDeliveryCols(os);
 
   return {success: true, message: 'Sheets initialized!'};
 }
@@ -318,11 +322,13 @@ function getOrders(clientId, isPredoplata) {
 
   var headers = data[0];
   var cidIdx = headers.indexOf('clientId');
+  var statusIdx = headers.indexOf('status');
   var orders = [];
 
-  // Get all orders for this client (newest first)
+  // Get all orders for this client (newest first), skip pending delivery requests
   for (var i = data.length - 1; i >= 1; i--) {
     if (String(data[i][cidIdx]) === String(clientId)) {
+      if (statusIdx >= 0 && data[i][statusIdx] === 'pending') continue;
       var obj = {};
       for (var j = 0; j < headers.length; j++) obj[headers[j]] = data[i][j];
       orders.push(obj);
@@ -332,6 +338,136 @@ function getOrders(clientId, isPredoplata) {
   // Limit: 30 for regular, all for predoplata
   var limit = isPredoplata ? orders.length : 30;
   return {orders: orders.slice(0, limit), total: orders.length};
+}
+
+// ── DELIVERY COLUMNS (deliveryDate / status) ───────────────────
+// Adds the two columns to Buyurtmalar if they don't exist yet and
+// returns their 1-based column indexes.
+function ensureDeliveryCols(sh) {
+  var lastCol = sh.getLastColumn();
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  var ddIdx = headers.indexOf('deliveryDate');
+  var stIdx = headers.indexOf('status');
+
+  if (ddIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('deliveryDate').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    ddIdx = lastCol - 1;
+  }
+  if (stIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('status').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    stIdx = lastCol - 1;
+  }
+
+  return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1};
+}
+
+// ── DELIVERY: ADD ────────────────────────────────────────────
+// Adds a new pending delivery request to Buyurtmalar.
+function addDelivery(data) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return {error: 'Server band, biroz kutib qayta urinib koring'};
+  }
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(ORDERS_SHEET);
+    if (!sh) return {error: 'Buyurtmalar sheet not found'};
+
+    ensureDeliveryCols(sh);
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+
+    var tz = 'Asia/Tashkent';
+    var dateStr = Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy');
+    var deliveryId = new Date().getTime();
+
+    var row = new Array(headers.length).fill('');
+    var set = function(name, val) {
+      var idx = headers.indexOf(name);
+      if (idx >= 0) row[idx] = val;
+    };
+    set('id', deliveryId);
+    set('clientId', data.clientId);
+    set('clientName', data.clientName || '');
+    set('date', dateStr);
+    set('qty', data.qty || 1);
+    set('operator', data.operator || 'Operator');
+    set('deliveryDate', data.deliveryDate || dateStr);
+    set('status', 'pending');
+
+    sh.appendRow(row);
+    return {success: true, id: deliveryId};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── DELIVERY: GET PENDING ────────────────────────────────────
+// Returns all pending deliveries, optionally filtered by deliveryDate.
+function getDeliveries(deliveryDate) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ORDERS_SHEET);
+  if (!sh) return {deliveries: []};
+
+  ensureDeliveryCols(sh);
+
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return {deliveries: []};
+
+  var headers = data[0];
+  var statusIdx = headers.indexOf('status');
+  var ddIdx = headers.indexOf('deliveryDate');
+
+  var deliveries = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    if (row[statusIdx] !== 'pending') continue;
+    if (deliveryDate && String(row[ddIdx]) !== String(deliveryDate)) continue;
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
+    deliveries.push(obj);
+  }
+  return {deliveries: deliveries, total: deliveries.length};
+}
+
+// ── DELIVERY: COMPLETE ────────────────────────────────────────
+// Marks a delivery as done, optionally updating the final qty/price/sum/payMethod.
+function completeDelivery(deliveryId, qty, price, sum, payMethod) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return {error: 'Server band, biroz kutib qayta urinib koring'};
+  }
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(ORDERS_SHEET);
+    if (!sh) return {error: 'Buyurtmalar sheet not found'};
+
+    ensureDeliveryCols(sh);
+    var data = sh.getDataRange().getValues();
+    var headers = data[0];
+    var idIdx = headers.indexOf('id');
+    var qtyIdx = headers.indexOf('qty');
+    var priceIdx = headers.indexOf('price');
+    var sumIdx = headers.indexOf('sum');
+    var payIdx = headers.indexOf('payMethod');
+    var statusIdx = headers.indexOf('status');
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]) === String(deliveryId)) {
+        if (qty !== undefined)       sh.getRange(i+1, qtyIdx+1).setValue(qty);
+        if (price !== undefined)     sh.getRange(i+1, priceIdx+1).setValue(price);
+        if (sum !== undefined)       sh.getRange(i+1, sumIdx+1).setValue(sum);
+        if (payMethod !== undefined) sh.getRange(i+1, payIdx+1).setValue(payMethod);
+        sh.getRange(i+1, statusIdx+1).setValue('done');
+        return {success: true, id: deliveryId};
+      }
+    }
+    return {error: 'Delivery not found: ' + deliveryId};
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ── GET STATS ─────────────────────────────────────────────────
