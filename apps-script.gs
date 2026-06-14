@@ -375,6 +375,17 @@ function normCourier(v) {
   return String(v == null ? '' : v).trim().toUpperCase();
 }
 
+// Normalizes a Buyurtmalar deliveryDate cell to a 'dd.MM.yyyy' string.
+// Sheets silently converts date-like strings written via appendRow into
+// Date values, so getValues() may return a Date object instead of the
+// original 'dd.MM.yyyy' string — convert it back for comparison/output.
+function normDeliveryDate(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, 'Asia/Tashkent', 'dd.MM.yyyy');
+  }
+  return String(v == null ? '' : v).trim();
+}
+
 // Looks up the "courier" zone of a client in Mijozlar by id.
 function lookupClientCourier(clientId) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -461,13 +472,15 @@ function getDeliveries(deliveryDate, courier) {
     var row = data[i];
     if (!row[0]) continue;
     if (row[statusIdx] !== 'pending') continue;
-    if (deliveryDate && String(row[ddIdx]) !== String(deliveryDate)) continue;
+    var rowDeliveryDate = normDeliveryDate(row[ddIdx]);
+    if (deliveryDate && rowDeliveryDate !== String(deliveryDate)) continue;
     if (courierFilter) {
       var rowCourier = normCourier(row[crIdx]);
       if (rowCourier && rowCourier !== courierFilter) continue;
     }
     var obj = {};
     for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
+    obj.deliveryDate = rowDeliveryDate;
     deliveries.push(obj);
   }
   return {deliveries: deliveries, total: deliveries.length};
