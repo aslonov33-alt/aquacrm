@@ -267,13 +267,6 @@ textarea.fin{resize:none}
     <div style="font-size:12px;opacity:.8;margin-top:3px" id="prl">Qongiroqlar bolimi</div>
   </div>
   <div class="card" style="padding:14px">
-    <div class="stl" style="margin-top:0">Rol tanlash</div>
-    <div style="display:flex;gap:8px">
-      <button class="btn bp" style="flex:1" id="role-op">📞 Operator</button>
-      <button class="btn bo" style="flex:1" id="role-co">🚚 Kuryer</button>
-    </div>
-  </div>
-  <div class="card" style="padding:14px">
     <div class="stl" style="margin-top:0">🔗 Google Sheets ulanish</div>
     <span class="flbl">Apps Script URL</span>
     <input class="fin" type="url" id="api-url" placeholder="https://script.google.com/macros/s/.../exec">
@@ -647,7 +640,7 @@ function renderC(reset){
     var s=ST[c.id]?ST[c.id].status:''
     var pre=c.predoplata==='yes'||c.predoplata===true
     var dt=c.days?'<span class="tag '+(c.days>365?'r':c.days>180?'or':'y')+'">'+c.days+' kun</span>':''
-    var k=c.courier?'<span class="tag gr">K'+c.courier+'</span>':''
+    var k=c.courier?'<span class="tag gr">'+c.courier+'</span>':''
     var locked=isLocked(c)
     var qt=c.status?qstag(c.status):''
     return '<div class="card tap'+(locked?' taken':'')+'" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+E(c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+qt+'</div></div></div>'
@@ -697,7 +690,7 @@ function openC(id){
   $('mlst').textContent=c.lastOrder||'—'
   $('mdys').textContent=c.days?c.days+' kun oldin':'—'
   $('mlcall').textContent=s.lastCall||c.lastCallDate||'Qongiroq qilinmagan'
-  $('mcour').textContent=c.courier?'Kuryer '+c.courier:'Belgilanmagan'
+  $('mcour').textContent=c.courier?'Zona '+c.courier:'Belgilanmagan'
   if(pre){$('mpre').textContent='Ha ✅';$('mpre-row').style.display='flex'}
   else $('mpre-row').style.display='none'
   // Edit form
@@ -1136,15 +1129,17 @@ function applyLogin(role, num, name){
   if(pnm)pnm.textContent=OP;
   if(prl)prl.textContent=role==='op'?'Qongiroqlar bolimi':'Yetkazib berish';
 
-  var nc=$('ni-clients'),nm=$('ni-map');
+  var nc=$('ni-clients'),nm=$('ni-map'),nh=$('ni-home');
   if(role==='op'){
     if(nc)nc.style.display='flex';
     if(nm)nm.style.display='flex';
+    if(nh)nh.style.display='flex';
     showSc('home');
   } else {
     COURIER_ZONE=num;
     if(nc)nc.style.display='none';
     if(nm)nm.style.display='flex';
+    if(nh)nh.style.display='none';
     showSc('courier');
   }
 }
@@ -1265,10 +1260,6 @@ window.addEventListener('DOMContentLoaded',function(){
       }
     })
   })
-
-  // Roles
-  $('role-op').addEventListener('click',function(){setRole('op')})
-  $('role-co').addEventListener('click',function(){setRole('co')})
 
   // Init
   $('tbs').textContent='Bosh sahifa'
