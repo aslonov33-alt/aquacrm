@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>AquaCRM</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -554,6 +557,30 @@ textarea.fin{resize:none}
 <div class="toast" id="toast"></div>
 
 <script>
+// ═══ APP VERSION (auto-update) ═══
+var APP_VERSION='2026-06-15-1';
+(function(){
+  var saved=localStorage.getItem('app_version');
+  if(saved===APP_VERSION)return;
+  if(sessionStorage.getItem('aq_reloading')===APP_VERSION)return;
+  var keepKeys=['aq_role','aq_num','aq_name','aq_op','aq_api'];
+  var keep={};
+  keepKeys.forEach(function(k){var v=localStorage.getItem(k);if(v!==null)keep[k]=v});
+  localStorage.clear();
+  Object.keys(keep).forEach(function(k){localStorage.setItem(k,keep[k])});
+  localStorage.setItem('app_version',APP_VERSION);
+  if(window.caches&&caches.keys){
+    caches.keys().then(function(names){names.forEach(function(n){caches.delete(n)})});
+  }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){r.unregister()});
+    });
+  }
+  sessionStorage.setItem('aq_reloading',APP_VERSION);
+  location.reload(true);
+})();
+
 // ═══ STATE ═══
 var API='', OP='Operator', ROLE='op';
 var D=[], ST={}, CF='all', CID=null, PG=40, OF=0, FL=[];
