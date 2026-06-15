@@ -29,6 +29,9 @@ function handle(e) {
     else if (action === 'addDelivery')      result = addDelivery(data);
     else if (action === 'getDeliveries')    result = getDeliveries(data.deliveryDate, data.courier);
     else if (action === 'completeDelivery') result = completeDelivery(data.deliveryId, data.qty, data.price, data.sum, data.payMethod);
+    else if (action === 'addCourierOrder')    result = addCourierOrder(data);
+    else if (action === 'lookupClientByPhone') result = lookupClientByPhone(data.phone);
+    else if (action === 'getAnalytics')        result = getAnalytics(data.month, data.year, data.courier);
     else result = {error: 'Unknown action: ' + action};
   } catch(err) {
     result = {error: err.toString()};
@@ -349,6 +352,9 @@ function ensureDeliveryCols(sh) {
   var ddIdx = headers.indexOf('deliveryDate');
   var stIdx = headers.indexOf('status');
   var crIdx = headers.indexOf('courier');
+  var srcIdx = headers.indexOf('source');
+  var addrIdx = headers.indexOf('address');
+  var phIdx = headers.indexOf('phone');
 
   if (ddIdx < 0) {
     lastCol++;
@@ -365,8 +371,24 @@ function ensureDeliveryCols(sh) {
     sh.getRange(1, lastCol).setValue('courier').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
     crIdx = lastCol - 1;
   }
+  if (srcIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('source').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    srcIdx = lastCol - 1;
+  }
+  if (addrIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('address').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    addrIdx = lastCol - 1;
+  }
+  if (phIdx < 0) {
+    lastCol++;
+    sh.getRange(1, lastCol).setValue('phone').setFontWeight('bold').setBackground('#6A1B9A').setFontColor('#fff');
+    phIdx = lastCol - 1;
+  }
 
-  return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1, courierCol: crIdx + 1};
+  return {deliveryDateCol: ddIdx + 1, statusCol: stIdx + 1, courierCol: crIdx + 1,
+          sourceCol: srcIdx + 1, addressCol: addrIdx + 1, phoneCol: phIdx + 1};
 }
 
 // Normalizes a courier-zone value for comparison: trims whitespace and
@@ -402,6 +424,40 @@ function lookupClientCourier(clientId) {
     }
   }
   return '';
+}
+
+// Extracts the last 9 digits of a phone number for comparison
+// (handles "+998901234567", "998901234567", "901234567", spaces/dashes).
+function last9Digits(phone) {
+  var digits = String(phone == null ? '' : phone).replace(/\D/g, '');
+  return digits.slice(-9);
+}
+
+// Looks up a client in Mijozlar by phone (last 9 digits, matches phone or phone2).
+// Returns {found:true, clientId, name} or {found:false}.
+function lookupClientByPhone(phone) {
+  var target = last9Digits(phone);
+  if (target.length < 9) return {found: false};
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(CLIENTS_SHEET);
+  if (!sh) return {found: false};
+
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var idIdx = headers.indexOf('id');
+  var nameIdx = headers.indexOf('name');
+  var phoneIdx = headers.indexOf('phone');
+  var phone2Idx = headers.indexOf('phone2');
+
+  for (var i = 1; i < data.length; i++) {
+    if (!data[i][idIdx]) continue;
+    if (last9Digits(data[i][phoneIdx]) === target ||
+        (phone2Idx >= 0 && last9Digits(data[i][phone2Idx]) === target)) {
+      return {found: true, clientId: data[i][idIdx], name: data[i][nameIdx] || ''};
+    }
+  }
+  return {found: false};
 }
 
 // ── DELIVERY: ADD ────────────────────────────────────────────
@@ -440,6 +496,59 @@ function addDelivery(data) {
 
     sh.appendRow(row);
     return {success: true, id: deliveryId};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── COURIER: ADD OWN ORDER ────────────────────────────────────
+// Lets a courier log an order a client called in to them directly,
+// bypassing the operator. Same Buyurtmalar row shape as addDelivery,
+// plus address/phone (for clients not yet in Mijozlar) and source='courier'.
+function addCourierOrder(data) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    return {error: 'Server band, biroz kutib qayta urinib koring'};
+  }
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(ORDERS_SHEET);
+    if (!sh) return {error: 'Buyurtmalar sheet not found'};
+
+    ensureDeliveryCols(sh);
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+
+    var tz = 'Asia/Tashkent';
+    var dateStr = data.deliveryDate || Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy');
+    var deliveryId = new Date().getTime();
+    var qty = parseInt(data.qty, 10) || 1;
+    var price = parseInt(data.price, 10) || 0;
+    var lookup = lookupClientByPhone(data.phone);
+
+    var row = new Array(headers.length).fill('');
+    var set = function(name, val) {
+      var idx = headers.indexOf(name);
+      if (idx >= 0) row[idx] = val;
+    };
+    set('id', deliveryId);
+    set('clientId', lookup.found ? lookup.clientId : '');
+    set('clientName', data.clientName || '');
+    set('date', dateStr);
+    set('qty', qty);
+    set('price', price);
+    set('sum', qty * price);
+    set('payMethod', data.payMethod || 'cash');
+    set('operator', data.operator || data.courier || 'Kuryer');
+    set('note', data.note || '');
+    set('deliveryDate', dateStr);
+    set('status', 'pending');
+    set('courier', normCourier(data.courier));
+    set('source', 'courier');
+    set('address', data.address || '');
+    set('phone', data.phone || '');
+
+    sh.appendRow(row);
+    return {success: true, id: deliveryId, clientId: lookup.found ? lookup.clientId : '', clientFound: lookup.found};
   } finally {
     lock.releaseLock();
   }
@@ -578,4 +687,91 @@ function getStats() {
   }
 
   return {totalClients: clients, totalCalls: calls, todayCalls: todayCalls, date: today};
+}
+
+// ── ANALYTICS (boss) ──────────────────────────────────────────
+// Aggregates Buyurtmalar for the given month/year, optionally filtered by
+// courier zone ('K1'/'K2'/...). Dates are stored as 'dd.MM.yyyy' text
+// (normDeliveryDate handles rows Sheets converted to Date objects).
+// Rows with empty 'status' are legacy entries — counted as 'done'.
+// Rows with empty 'source' are legacy entries — counted as 'operator'.
+function getAnalytics(month, year, courier) {
+  var empty = {totalOrders: 0, totalRevenue: 0, totalBottles: 0, doneCount: 0, pendingCount: 0,
+                byDay: [], byCourier: [], bySource: {operator: 0, courier: 0}};
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ORDERS_SHEET);
+  if (!sh) return empty;
+
+  ensureDeliveryCols(sh);
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return empty;
+
+  var headers = data[0];
+  var dateIdx = headers.indexOf('date');
+  var qtyIdx = headers.indexOf('qty');
+  var sumIdx = headers.indexOf('sum');
+  var statusIdx = headers.indexOf('status');
+  var courierIdx = headers.indexOf('courier');
+  var sourceIdx = headers.indexOf('source');
+
+  var mm = month ? (Number(month) < 10 ? '0' + Number(month) : '' + Number(month)) : '';
+  var yy = year ? String(year) : '';
+  var courierFilter = courier ? normCourier(courier) : '';
+
+  var totalOrders = 0, totalRevenue = 0, totalBottles = 0, doneCount = 0, pendingCount = 0;
+  var dayMap = {}, courierMap = {}, sourceCount = {operator: 0, courier: 0};
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+
+    var dateStr = normDeliveryDate(row[dateIdx]);
+    var parts = dateStr.split('.');
+    if (parts.length !== 3) continue;
+    if (mm && parts[1] !== mm) continue;
+    if (yy && parts[2] !== yy) continue;
+
+    var rowCourier = normCourier(row[courierIdx]);
+    if (courierFilter && rowCourier !== courierFilter) continue;
+
+    var qty = parseInt(row[qtyIdx], 10) || 0;
+    var sum = parseInt(row[sumIdx], 10) || 0;
+    var status = row[statusIdx] || 'done';
+    var source = String(row[sourceIdx] || '').trim().toLowerCase() || 'operator';
+
+    totalOrders++;
+    totalRevenue += sum;
+    totalBottles += qty;
+    if (status === 'pending') pendingCount++; else doneCount++;
+    if (source === 'courier') sourceCount.courier++; else sourceCount.operator++;
+
+    if (!dayMap[dateStr]) dayMap[dateStr] = {date: dateStr, orders: 0, bottles: 0, revenue: 0, done: 0, pending: 0};
+    dayMap[dateStr].orders++;
+    dayMap[dateStr].bottles += qty;
+    dayMap[dateStr].revenue += sum;
+    if (status === 'pending') dayMap[dateStr].pending++; else dayMap[dateStr].done++;
+
+    if (!courierMap[rowCourier]) courierMap[rowCourier] = {courier: rowCourier, orders: 0, bottles: 0, revenue: 0};
+    courierMap[rowCourier].orders++;
+    courierMap[rowCourier].bottles += qty;
+    courierMap[rowCourier].revenue += sum;
+  }
+
+  var byDay = [];
+  for (var dKey in dayMap) byDay.push(dayMap[dKey]);
+  byDay.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+
+  var daysCount = byDay.length || 1;
+  var byCourier = [];
+  for (var cKey in courierMap) {
+    var cm = courierMap[cKey];
+    cm.avgPerDay = Math.round(cm.revenue / daysCount);
+    byCourier.push(cm);
+  }
+  byCourier.sort(function(a, b) { return b.revenue - a.revenue; });
+
+  return {totalOrders: totalOrders, totalRevenue: totalRevenue, totalBottles: totalBottles,
+          doneCount: doneCount, pendingCount: pendingCount,
+          byDay: byDay, byCourier: byCourier, bySource: sourceCount};
 }

@@ -143,6 +143,13 @@ textarea.fin{resize:none}
 .login-btn:disabled{opacity:.4;cursor:not-allowed}
 .login-btn:active:not(:disabled){opacity:.8}
 
+/* HISOBOT (BOSS ANALYTICS) */
+.hr-table{width:100%;border-collapse:collapse;font-size:12px}
+.hr-table th,.hr-table td{padding:8px 10px;text-align:right;border-bottom:1px solid #F0F4F8;white-space:nowrap}
+.hr-table th:first-child,.hr-table td:first-child{text-align:left}
+.hr-table th{font-weight:700;color:var(--sub);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.hr-table tr:last-child td{border-bottom:none}
+
 </style>
 </head>
 <body>
@@ -230,6 +237,7 @@ textarea.fin{resize:none}
     <div class="sc-card"><div class="sn" style="color:var(--orange);font-size:18px" id="bot-left">0</div><div class="sl">Qoldi</div></div>
     <div class="sc-card"><div class="sn" style="color:var(--purple);font-size:18px" id="bot-pre">0</div><div class="sl">Predoplata</div></div>
   </div>
+  <button class="btn bp" id="co-open-btn" style="width:100%;margin-bottom:10px">+ Yangi buyurtma</button>
   <div class="fr" id="cf-pills">
     <div class="pill on" data-cf="today">Bugun</div>
     <div class="pill" data-cf="tomorrow">Ertaga</div>
@@ -291,6 +299,43 @@ textarea.fin{resize:none}
     <div class="ir"><span class="il">Asosiy</span><span class="iv"><a href="tel:+998956001113" style="color:var(--blue);font-weight:700">+998 95 600-1113</a></span></div>
     <div class="ir"><span class="il">Qoshimcha</span><span class="iv"><a href="tel:+998956041113" style="color:var(--blue);font-weight:700">+998 95 604-1113</a></span></div>
     <div class="ir"><span class="il">Dispetcher</span><span class="iv"><a href="tel:+998652261001" style="color:var(--blue);font-weight:700">+998 65 226-1001</a></span></div>
+  </div>
+</div>
+
+<!-- HISOBOT (BOSS ANALYTICS) -->
+<div class="sc" id="sc-hisobot">
+  <div class="card" style="padding:14px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:17px;font-weight:800">Hisobot</div>
+    <button class="btn bo bs" onclick="logout()">Chiqish</button>
+  </div>
+  <div class="card" style="padding:14px">
+    <span class="flbl" style="margin-top:0">Oy</span>
+    <input class="fin" type="month" id="hr-month">
+    <span class="flbl">Kuryer</span>
+    <select class="fin" id="hr-courier">
+      <option value="">Barchasi</option>
+      <option value="K1">Shermat (K1)</option>
+      <option value="K2">Mahsum (K2)</option>
+    </select>
+  </div>
+  <div class="g4">
+    <div class="sc-card"><div class="sn" style="font-size:18px" id="hr-orders">0</div><div class="sl">Jami buyurtmalar</div></div>
+    <div class="sc-card"><div class="sn" style="font-size:18px" id="hr-revenue">0</div><div class="sl">Tushum</div></div>
+    <div class="sc-card"><div class="sn" style="font-size:18px" id="hr-bottles">0</div><div class="sl">Baklashka soni</div></div>
+    <div class="sc-card"><div class="sn" style="font-size:18px" id="hr-done">0 / 0</div><div class="sl">Bajarilgan / Kutilmoqda</div></div>
+  </div>
+  <div class="card" style="padding:14px">
+    <div class="stl" style="margin-top:0">Manba boyicha</div>
+    <div class="ir"><span class="il">Operator orqali</span><span class="iv" id="hr-src-op">0</span></div>
+    <div class="ir"><span class="il">Kuryer ozi qoshgan</span><span class="iv" id="hr-src-co">0</span></div>
+  </div>
+  <div class="stl">Kunlar boyicha</div>
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table class="hr-table" id="hr-day-table"></table>
+  </div>
+  <div class="stl">Kuryerlar boyicha</div>
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table class="hr-table" id="hr-courier-table"></table>
   </div>
 </div>
 
@@ -454,12 +499,56 @@ textarea.fin{resize:none}
   </div>
 </div>
 
+<!-- COURIER NEW ORDER MODAL -->
+<div class="mo" id="co-modal">
+  <div class="mdl">
+    <div class="mh2"></div>
+    <div class="mhd">
+      <div class="mtt">Yangi buyurtma</div>
+    </div>
+    <div class="mbd">
+      <span class="flbl" style="margin-top:0">Mijoz ismi</span>
+      <input class="fin" type="text" id="co-name" placeholder="Ism familiya">
+      <span class="flbl">Manzil</span>
+      <input class="fin" type="text" id="co-addr" placeholder="Manzil">
+      <span class="flbl">Telefon</span>
+      <input class="fin" type="tel" id="co-phone" placeholder="+998...">
+      <div class="stl">Soni (butilka)</div>
+      <div class="qty-box">
+        <button class="qty-btn qty-minus" id="co-qty-minus">-</button>
+        <div class="qty-val" id="co-qty-val">1</div>
+        <button class="qty-btn qty-plus" id="co-qty-plus">+</button>
+      </div>
+      <span class="flbl">Narx (1 butilka)</span>
+      <input class="fin" type="number" id="co-price" value="15000">
+      <div class="total-box">
+        <div class="total-sum" id="co-sum">15 000 som</div>
+        <div class="total-lbl">Jami summa</div>
+      </div>
+      <div class="stl">Tolov</div>
+      <div style="display:flex;gap:6px">
+        <button class="pay-btn" id="co-pay-cash" style="background:#2E7D32;color:#fff;border:2px solid #2E7D32;flex:1">Naqd</button>
+        <button class="pay-btn" id="co-pay-debt" style="background:#F0F4F8;color:var(--sub);border:2px solid #E3E8F0;flex:1">Qarz</button>
+      </div>
+      <span class="flbl">Sana</span>
+      <input class="fin" type="date" id="co-date">
+      <span class="flbl">Izoh</span>
+      <textarea class="fin" id="co-note" rows="2" placeholder="Izoh..."></textarea>
+      <div class="ar">
+        <button class="btn bp" id="co-save" style="flex:1">Saqlash</button>
+        <button class="btn bo" id="co-cancel">Bekor qilish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="bnav">
   <button class="ni on" id="ni-home"><span class="ni-i">🏠</span><span>Bosh sahifa</span></button>
   <button class="ni" id="ni-clients"><span class="ni-i">👥<span class="bdg" id="bu">0</span></span><span>Mijozlar</span></button>
   <button class="ni" id="ni-courier"><span class="ni-i">🚚<span class="bdg" id="bc" style="display:none">0</span></span><span>Yetkazish</span></button>
   <button class="ni" id="ni-map"><span class="ni-i">🗺️</span><span>Xarita</span></button>
   <button class="ni" id="ni-profile"><span class="ni-i">⚙️</span><span>Sozlamalar</span></button>
+  <button class="ni" id="ni-hisobot"><span class="ni-i">📊</span><span>Hisobot</span></button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -470,6 +559,8 @@ var API='', OP='Operator', ROLE='op';
 var D=[], ST={}, CF='all', CID=null, PG=40, OF=0, FL=[];
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
 var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
+var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
+var COURIER_NAMES={K1:'Shermat (K1)',K2:'Mahsum (K2)'};
 
 // ═══ UTILS ═══
 function $(i){return document.getElementById(i);}
@@ -913,8 +1004,8 @@ function renderCourier(){
   el.innerHTML=DELIVERIES.map(function(d,i){
     var c=findClient(d.clientId)
     var name=c?c.name:(d.clientName||'—')
-    var addr=c?(c.addrNorm||c.addr||'—'):'—'
-    var phone=c?(c.phone||''):''
+    var addr=c?(c.addrNorm||c.addr||'—'):(d.address||'—')
+    var phone=c?(c.phone||''):(d.phone||'')
     var debt=c?(c.debt||0):0
     var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
     return '<div class="courier-card" data-didx="'+i+'"><div class="courier-header">'+(pre?'<div style="position:absolute;right:10px;top:8px;font-size:10px;background:rgba(255,255,255,.2);padding:2px 6px;border-radius:8px">🟣 PREDOPLATA</div>':'')+
@@ -943,7 +1034,7 @@ function loadDeliveries(){
   api('getDeliveries',params,function(data,err){
     if(data&&data.deliveries){
       DELIVERIES=data.deliveries.map(function(d){
-        return {id:d.id,clientId:d.clientId,clientName:d.clientName,qty:parseInt(d.qty)||1,deliveryDate:d.deliveryDate||''}
+        return {id:d.id,clientId:d.clientId,clientName:d.clientName,qty:parseInt(d.qty)||1,deliveryDate:d.deliveryDate||'',address:d.address||'',phone:d.phone||''}
       })
     } else DELIVERIES=[]
     renderCourier()
@@ -956,10 +1047,10 @@ function openDelivery(idx){
   CURR_DELIV=idx;CURR_QTY=d.qty||1;CURR_PRICE=13000;CURR_PAY='cash'
   var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
   $('dm-name').textContent=c?c.name:(d.clientName||'—')
-  $('dm-addr').textContent='📍 '+(c?(c.addrNorm||c.addr||'—'):'—')
-  $('dm-tel').textContent=c&&c.phone?c.phone:'—';$('dm-tel').href=c&&c.phone?'tel:'+c.phone:'#'
-  $('dm-call').href=c&&c.phone?'tel:'+c.phone:'#'
-  var maddr=(c&&c.addrMaps)||((c?(c.addrNorm||c.addr||''):'')+', Buxoro, Uzbekistan')
+  $('dm-addr').textContent='📍 '+(c?(c.addrNorm||c.addr||'—'):(d.address||'—'))
+  $('dm-tel').textContent=c&&c.phone?c.phone:(d.phone||'—');$('dm-tel').href=c&&c.phone?'tel:'+c.phone:(d.phone?'tel:'+d.phone:'#')
+  $('dm-call').href=c&&c.phone?'tel:'+c.phone:(d.phone?'tel:'+d.phone:'#')
+  var maddr=(c&&c.addrMaps)||((c?(c.addrNorm||c.addr||''):(d.address||''))+', Buxoro, Uzbekistan')
   $('dm-map').href='https://www.google.com/maps/search/'+encodeURIComponent(maddr)
   $('dm-debt').textContent=c&&c.debt>0?c.debt.toLocaleString()+' som ⚠️':'Qarz yoq ✅'
   $('dm-debt').style.color=c&&c.debt>0?'var(--red)':'var(--green)'
@@ -1031,17 +1122,122 @@ function addDeliveryRequest(deliveryDate){
   })
 }
 
+// ═══ COURIER: NEW ORDER ═══
+function openCourierOrderModal(){
+  CO_QTY=1;CO_PAY='cash';CO_CLIENT_ID='';CO_PRICE_TOUCHED=false
+  $('co-name').value='';$('co-addr').value='';$('co-phone').value=''
+  $('co-qty-val').textContent='1'
+  $('co-price').value=15000
+  $('co-note').value=''
+  $('co-date').value=todayISO()
+  updateCoTotal()
+  updateCoPayBtns()
+  $('co-modal').className='mo on'
+}
+
+function updateCoTotal(){
+  var price=parseInt($('co-price').value)||0
+  $('co-sum').textContent=(CO_QTY*price).toLocaleString()+' som'
+}
+
+function updateCoPayBtns(){
+  var el
+  el=$('co-pay-cash');el.style.background=CO_PAY==='cash'?'#2E7D32':'#E8F5E9';el.style.color=CO_PAY==='cash'?'#fff':'#1B5E20'
+  el=$('co-pay-debt');el.style.background=CO_PAY==='debt'?'#C62828':'#FFEBEE';el.style.color=CO_PAY==='debt'?'#fff':'#C62828'
+}
+
+function lookupCoPhone(){
+  var phone=$('co-phone').value
+  var digits=(phone||'').replace(/\D/g,'')
+  if(digits.length<9||!API)return
+  api('lookupClientByPhone',{phone:phone},function(data,err){
+    if(data&&data.found){
+      CO_CLIENT_ID=data.clientId||''
+      if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
+      if(data.name&&!$('co-name').value.trim())$('co-name').value=data.name
+    } else {
+      CO_CLIENT_ID=''
+      if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
+    }
+  })
+}
+
+function saveCourierOrder(){
+  var name=$('co-name').value.trim()
+  if(!name){toast('Mijoz ismini kiriting!');return}
+  if(!API){toast('API sozlanmagan!');return}
+  var price=parseInt($('co-price').value)||0
+  var dateVal=$('co-date').value
+  var deliveryDate=dateVal?inputDateToUz(dateVal):todayUz()
+  var data={
+    clientName:name,address:$('co-addr').value.trim(),phone:$('co-phone').value.trim(),
+    qty:CO_QTY,price:price,payMethod:CO_PAY,
+    deliveryDate:deliveryDate,note:$('co-note').value.trim(),
+    courier:'K'+COURIER_ZONE,operator:OP
+  }
+  api('addCourierOrder',data,function(res,err){
+    if(res&&res.success){
+      toast('Buyurtma qoshildi')
+      $('co-modal').className='mo'
+      loadDeliveries()
+    } else {
+      toast('Xatolik! Qayta urinib koring')
+    }
+  })
+}
+
+// ═══ HISOBOT (BOSS) ═══
+function loadAnalytics(){
+  if(!API)return
+  var monthVal=$('hr-month').value
+  if(!monthVal){
+    var d=new Date()
+    monthVal=d.getFullYear()+'-'+pad2(d.getMonth()+1)
+    $('hr-month').value=monthVal
+  }
+  var parts=monthVal.split('-')
+  var year=parseInt(parts[0]),month=parseInt(parts[1])
+  var courier=$('hr-courier').value
+  api('getAnalytics',{month:month,year:year,courier:courier},function(data,err){
+    if(err||!data||data.error){toast('Xatolik: '+(err||(data&&data.error)));return}
+    renderAnalytics(data)
+  })
+}
+
+function renderAnalytics(data){
+  $('hr-orders').textContent=(data.totalOrders||0).toLocaleString()
+  $('hr-revenue').textContent=(data.totalRevenue||0).toLocaleString()
+  $('hr-bottles').textContent=(data.totalBottles||0).toLocaleString()
+  $('hr-done').textContent=(data.doneCount||0)+' / '+(data.pendingCount||0)
+  $('hr-src-op').textContent=(data.bySource&&data.bySource.operator)||0
+  $('hr-src-co').textContent=(data.bySource&&data.bySource.courier)||0
+
+  var dayRows=(data.byDay||[]).map(function(d){
+    return '<tr><td>'+E(d.date)+'</td><td>'+d.orders+'</td><td>'+d.bottles+'</td><td>'+d.revenue.toLocaleString()+'</td><td>'+d.done+'</td><td>'+d.pending+'</td></tr>'
+  }).join('')
+  $('hr-day-table').innerHTML='<tr><th>Sana</th><th>Buyurtma</th><th>Baklashka</th><th>Tushum</th><th>Bajarilgan</th><th>Kutilmoqda</th></tr>'+
+    (dayRows||'<tr><td colspan="6" style="text-align:center;color:var(--sub)">Malumot yoq</td></tr>')
+
+  var courierRows=(data.byCourier||[]).map(function(c){
+    var label=COURIER_NAMES[c.courier]||(c.courier||'Belgilanmagan')
+    return '<tr><td>'+E(label)+'</td><td>'+c.orders+'</td><td>'+c.bottles+'</td><td>'+c.revenue.toLocaleString()+'</td><td>'+(c.avgPerDay||0).toLocaleString()+'</td></tr>'
+  }).join('')
+  $('hr-courier-table').innerHTML='<tr><th>Kuryer</th><th>Buyurtma</th><th>Baklashka</th><th>Tushum</th><th>Ortacha/kun</th></tr>'+
+    (courierRows||'<tr><td colspan="5" style="text-align:center;color:var(--sub)">Malumot yoq</td></tr>')
+}
+
 // ═══ NAV ═══
 function showSc(n){
   document.querySelectorAll('.sc').forEach(function(s){s.className='sc'})
   document.querySelectorAll('.ni').forEach(function(x){x.className='ni'})
   $('sc-'+n).className='sc on'
   var ni=$('ni-'+n);if(ni)ni.className='ni on'
-  var t={home:'Bosh sahifa',clients:'Mijozlar',courier:'Yetkazish',map:'Xarita',profile:'Sozlamalar'}
+  var t={home:'Bosh sahifa',clients:'Mijozlar',courier:'Yetkazish',map:'Xarita',profile:'Sozlamalar',hisobot:'Hisobot'}
   $('tbs').textContent=t[n]||''
   if(n==='clients'){if(!D.length&&!LOADING)loadClients();else renderC(true)}
   if(n==='map')mapList()
   if(n==='courier'){loadDeliveries()}
+  if(n==='hisobot'){loadAnalytics()}
 }
 
 function setRole(r){
@@ -1076,6 +1272,7 @@ var USERS = [
   {pass:'shermat', role:'co', num:1, name:'Kuryer 1 — Shermat'},
   {pass:'Mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
   {pass:'mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
+  {pass:'boss',    role:'boss', num:0, name:'Boss'},
 ];
 
 function initLogin(){
@@ -1120,26 +1317,34 @@ function applyLogin(role, num, name){
   if(ls) ls.style.display = 'none';
 
   ROLE = role;
-  var savedName = name || localStorage.getItem('aq_name') || (role==='op'?'Operator '+num:'Kuryer '+num);
+  var savedName = name || localStorage.getItem('aq_name') || (role==='op'?'Operator '+num:role==='boss'?'Boss':'Kuryer '+num);
   OP = savedName;
   localStorage.setItem('aq_op', OP);
 
   var pav=$('pav'),pnm=$('pnm'),prl=$('prl');
-  if(pav)pav.textContent=role==='op'?'📞':'🚚';
+  if(pav)pav.textContent=role==='op'?'📞':role==='boss'?'📊':'🚚';
   if(pnm)pnm.textContent=OP;
-  if(prl)prl.textContent=role==='op'?'Qongiroqlar bolimi':'Yetkazib berish';
+  if(prl)prl.textContent=role==='op'?'Qongiroqlar bolimi':role==='boss'?'Boshqaruv':'Yetkazib berish';
 
-  var nc=$('ni-clients'),nm=$('ni-map'),nh=$('ni-home');
+  var nh=$('ni-home'),nc=$('ni-clients'),ncour=$('ni-courier'),nm=$('ni-map'),npr=$('ni-profile'),nhis=$('ni-hisobot');
+  function setNav(home,clients,courier,map,profile,hisobot){
+    if(nh)nh.style.display=home?'flex':'none';
+    if(nc)nc.style.display=clients?'flex':'none';
+    if(ncour)ncour.style.display=courier?'flex':'none';
+    if(nm)nm.style.display=map?'flex':'none';
+    if(npr)npr.style.display=profile?'flex':'none';
+    if(nhis)nhis.style.display=hisobot?'flex':'none';
+  }
+
   if(role==='op'){
-    if(nc)nc.style.display='flex';
-    if(nm)nm.style.display='flex';
-    if(nh)nh.style.display='flex';
+    setNav(true,true,true,true,true,false);
     showSc('home');
+  } else if(role==='boss'){
+    setNav(false,false,false,false,false,true);
+    showSc('hisobot');
   } else {
     COURIER_ZONE=num;
-    if(nc)nc.style.display='none';
-    if(nm)nm.style.display='flex';
-    if(nh)nh.style.display='none';
+    setNav(false,false,true,true,true,false);
     showSc('courier');
   }
 }
@@ -1170,6 +1375,7 @@ window.addEventListener('DOMContentLoaded',function(){
   $('ni-courier').addEventListener('click',function(){showSc('courier')})
   $('ni-map').addEventListener('click',function(){showSc('map')})
   $('ni-profile').addEventListener('click',function(){showSc('profile')})
+  $('ni-hisobot').addEventListener('click',function(){showSc('hisobot')})
   $('prof-btn').addEventListener('click',function(){showSc('profile')})
   $('sync-btn').addEventListener('click',function(){loadClients();syncStats()})
   $('gmap-btn').addEventListener('click',function(){window.open('https://www.google.com/maps','_blank')})
@@ -1227,6 +1433,22 @@ window.addEventListener('DOMContentLoaded',function(){
     $('cf-pills').querySelectorAll('.pill').forEach(function(x){x.className='pill'})
     p.className='pill on';COURIER_FILTER=p.dataset.cf;loadDeliveries()
   })
+
+  // Courier: new order modal
+  on('co-open-btn','click',openCourierOrderModal)
+  on('co-cancel','click',function(){$('co-modal').className='mo'})
+  $('co-modal').addEventListener('click',function(e){if(e.target===this)this.className='mo'})
+  on('co-qty-minus','click',function(){if(CO_QTY>1){CO_QTY--;$('co-qty-val').textContent=CO_QTY;updateCoTotal()}})
+  on('co-qty-plus','click',function(){CO_QTY++;$('co-qty-val').textContent=CO_QTY;updateCoTotal()})
+  on('co-price','input',function(){CO_PRICE_TOUCHED=true;updateCoTotal()})
+  on('co-phone','input',lookupCoPhone)
+  on('co-pay-cash','click',function(){CO_PAY='cash';updateCoPayBtns()})
+  on('co-pay-debt','click',function(){CO_PAY='debt';updateCoPayBtns()})
+  on('co-save','click',saveCourierOrder)
+
+  // Hisobot (boss)
+  on('hr-month','change',loadAnalytics)
+  on('hr-courier','change',loadAnalytics)
 
   // Bottle counter
   on('bot-minus','click',function(){var inp=$('bot-input');if(inp&&parseInt(inp.value)>0)inp.value=parseInt(inp.value)-1})
