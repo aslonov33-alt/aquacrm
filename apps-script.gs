@@ -17,7 +17,7 @@ function handle(e) {
     }
     var action = (data.action) || (e.parameter && e.parameter.action) || '';
 
-    if      (action === 'getClients')     result = getClients();
+    if      (action === 'getClients')     result = getClients(data);
     else if (action === 'updateClient')   result = updateClient(data);
     else if (action === 'logCall')        result = logCall(data);
     else if (action === 'getCalls')       result = getCalls(data.clientId);
@@ -100,31 +100,109 @@ function ensureStatusCols(sh) {
   return {statusCol: statusIdx + 1, takenByCol: takenByIdx + 1};
 }
 
-// ── GET CLIENTS ───────────────────────────────────────────────
-function getClients() {
+// ── CACHE: MIJOZLAR (CLIENTS) ────────────────────────────────────
+// CacheService keeps the whole Mijozlar table (as raw row arrays, not
+// objects, to stay well under the 100KB-per-key limit) for CACHE_TTL
+// seconds, split into chunks. This avoids a full getDataRange() read
+// (4900+ rows) on every getClients/getStats/lookup call. Any write to
+// Mijozlar (updateClient, takeNextClient, setClientStatus, logCall)
+// must call clearClientsCache() afterwards.
+var CACHE_TTL = 21600; // 6 hours — CacheService max
+var CLIENTS_CACHE_PREFIX = 'mij_v1';
+var CLIENTS_CACHE_CHUNK = 200; // rows per cache chunk
+
+function getClientsRaw() {
+  var cache = CacheService.getScriptCache();
+  var metaStr = cache.get(CLIENTS_CACHE_PREFIX + '_meta');
+  if (metaStr) {
+    var meta = JSON.parse(metaStr);
+    var keys = [];
+    for (var i = 0; i < meta.chunks; i++) keys.push(CLIENTS_CACHE_PREFIX + '_c' + i);
+    var map = keys.length ? cache.getAll(keys) : {};
+    var rows = [];
+    var ok = true;
+    for (var i = 0; i < meta.chunks; i++) {
+      var part = map[CLIENTS_CACHE_PREFIX + '_c' + i];
+      if (part === undefined || part === null) { ok = false; break; }
+      rows = rows.concat(JSON.parse(part));
+    }
+    if (ok) return {headers: meta.headers, rows: rows};
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(CLIENTS_SHEET);
-  if (!sh) return {error: 'Sheet not found. Run initSheets() first.'};
-
+  if (!sh) return {headers: [], rows: []};
   ensureStatusCols(sh);
 
   var data = sh.getDataRange().getValues();
-  if (data.length < 2) return {clients: []};
-
-  var headers = data[0];
-  var clients = [];
+  var headers = data.length ? data[0] : [];
+  var rows = [];
   for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (!row[0]) continue;
+    if (data[i][0]) rows.push(data[i]);
+  }
+
+  var chunks = Math.max(1, Math.ceil(rows.length / CLIENTS_CACHE_CHUNK));
+  var puts = {};
+  for (var c = 0; c < chunks; c++) {
+    puts[CLIENTS_CACHE_PREFIX + '_c' + c] = JSON.stringify(rows.slice(c * CLIENTS_CACHE_CHUNK, (c + 1) * CLIENTS_CACHE_CHUNK));
+  }
+  puts[CLIENTS_CACHE_PREFIX + '_meta'] = JSON.stringify({chunks: rows.length ? chunks : 0, headers: headers});
+  cache.putAll(puts, CACHE_TTL);
+
+  return {headers: headers, rows: rows};
+}
+
+function clearClientsCache() {
+  var cache = CacheService.getScriptCache();
+  var metaStr = cache.get(CLIENTS_CACHE_PREFIX + '_meta');
+  var keys = [CLIENTS_CACHE_PREFIX + '_meta'];
+  if (metaStr) {
+    var meta = JSON.parse(metaStr);
+    for (var i = 0; i < meta.chunks; i++) keys.push(CLIENTS_CACHE_PREFIX + '_c' + i);
+  }
+  cache.removeAll(keys);
+}
+
+// ── GET CLIENTS ───────────────────────────────────────────────
+// Supports optional pagination/search: {offset, limit, search}.
+// Without params, returns the full list (backward compatible).
+function getClients(params) {
+  params = params || {};
+  var raw = getClientsRaw();
+  var headers = raw.headers;
+  if (!headers.length) return {clients: [], total: 0, hasMore: false};
+
+  var nameIdx = headers.indexOf('name');
+  var phoneIdx = headers.indexOf('phone');
+  var phone2Idx = headers.indexOf('phone2');
+  var addrIdx = headers.indexOf('addr');
+
+  var rows = raw.rows;
+  var search = String(params.search || '').trim().toLowerCase();
+  if (search) {
+    rows = rows.filter(function(row) {
+      return (nameIdx >= 0 && String(row[nameIdx] || '').toLowerCase().indexOf(search) >= 0) ||
+             (phoneIdx >= 0 && String(row[phoneIdx] || '').toLowerCase().indexOf(search) >= 0) ||
+             (phone2Idx >= 0 && String(row[phone2Idx] || '').toLowerCase().indexOf(search) >= 0) ||
+             (addrIdx >= 0 && String(row[addrIdx] || '').toLowerCase().indexOf(search) >= 0);
+    });
+  }
+
+  var total = rows.length;
+  var offset = parseInt(params.offset, 10) || 0;
+  var limit = parseInt(params.limit, 10);
+  if (!limit || limit <= 0) limit = total;
+  var page = rows.slice(offset, offset + limit);
+
+  var clients = page.map(function(row) {
     var obj = {};
-    for (var j = 0; j < headers.length; j++) {
-      obj[headers[j]] = row[j];
-    }
+    for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
     obj.status = obj['Статус'] || '';
     obj.takenBy = obj['КтоВзял'] || '';
-    clients.push(obj);
-  }
-  return {clients: clients, total: clients.length};
+    return obj;
+  });
+
+  return {clients: clients, total: total, hasMore: offset + limit < total};
 }
 
 // ── UPDATE CLIENT ─────────────────────────────────────────────
@@ -146,6 +224,7 @@ function updateClient(data) {
           sh.getRange(i+1, idx+1).setValue(data[field]);
         }
       });
+      clearClientsCache();
       return {success: true, id: data.id};
     }
   }
@@ -187,6 +266,7 @@ function takeNextClient(operatorName) {
 
       sh.getRange(i+1, cols.statusCol).setValue('Взят');
       sh.getRange(i+1, cols.takenByCol).setValue(takenByValue);
+      clearClientsCache();
 
       var obj = {};
       for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
@@ -227,6 +307,7 @@ function setClientStatus(clientId, status, operatorName) {
       if (String(data[i][idIdx]) === String(clientId)) {
         sh.getRange(i+1, cols.statusCol).setValue(status || '');
         sh.getRange(i+1, cols.takenByCol).setValue(takenByValue);
+        clearClientsCache();
         return {success: true, id: clientId, status: status, takenBy: takenByValue};
       }
     }
@@ -284,9 +365,12 @@ function logCall(data) {
       os.appendRow([callId, data.clientId, data.clientName||'', dateStr,
         data.qty||1, data.price||13000, data.sum||0,
         data.payMethod||'cash', data.operator||'Operator', data.note||'']);
+      clearOrdersCache();
     }
   }
 
+  clearClientsCache();
+  clearStatsCache();
   return {success: true, callId: callId, date: dateStr, time: timeStr};
 }
 
@@ -316,24 +400,21 @@ function getCalls(clientId) {
 
 // ── GET ORDERS ────────────────────────────────────────────────
 function getOrders(clientId, isPredoplata) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(ORDERS_SHEET);
-  if (!sh) return {orders: []};
+  var raw = getOrdersRaw();
+  var headers = raw.headers;
+  if (!headers.length) return {orders: []};
 
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) return {orders: []};
-
-  var headers = data[0];
   var cidIdx = headers.indexOf('clientId');
   var statusIdx = headers.indexOf('status');
   var orders = [];
 
   // Get all orders for this client (newest first), skip pending delivery requests
-  for (var i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][cidIdx]) === String(clientId)) {
-      if (statusIdx >= 0 && data[i][statusIdx] === 'pending') continue;
+  for (var i = raw.rows.length - 1; i >= 0; i--) {
+    var row = raw.rows[i];
+    if (String(row[cidIdx]) === String(clientId)) {
+      if (statusIdx >= 0 && row[statusIdx] === 'pending') continue;
       var obj = {};
-      for (var j = 0; j < headers.length; j++) obj[headers[j]] = data[i][j];
+      for (var j = 0; j < headers.length; j++) obj[headers[j]] = row[j];
       orders.push(obj);
     }
   }
@@ -391,6 +472,68 @@ function ensureDeliveryCols(sh) {
           sourceCol: srcIdx + 1, addressCol: addrIdx + 1, phoneCol: phIdx + 1};
 }
 
+// ── CACHE: BUYURTMALAR (ORDERS) ──────────────────────────────────
+// Same chunked CacheService pattern as Mijozlar — caches the whole
+// Buyurtmalar table for CACHE_TTL seconds so getOrders/getAnalytics/
+// getDeliveries don't each re-read the full sheet. Any write to
+// Buyurtmalar (addDelivery, addCourierOrder, completeDelivery,
+// removeDuplicateDeliveries, fixDeliveryCouriers) must call
+// clearOrdersCache() afterwards.
+var ORDERS_CACHE_PREFIX = 'buy_v1';
+var ORDERS_CACHE_CHUNK = 300; // rows per cache chunk
+
+function getOrdersRaw() {
+  var cache = CacheService.getScriptCache();
+  var metaStr = cache.get(ORDERS_CACHE_PREFIX + '_meta');
+  if (metaStr) {
+    var meta = JSON.parse(metaStr);
+    var keys = [];
+    for (var i = 0; i < meta.chunks; i++) keys.push(ORDERS_CACHE_PREFIX + '_c' + i);
+    var map = keys.length ? cache.getAll(keys) : {};
+    var rows = [];
+    var ok = true;
+    for (var i = 0; i < meta.chunks; i++) {
+      var part = map[ORDERS_CACHE_PREFIX + '_c' + i];
+      if (part === undefined || part === null) { ok = false; break; }
+      rows = rows.concat(JSON.parse(part));
+    }
+    if (ok) return {headers: meta.headers, rows: rows};
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ORDERS_SHEET);
+  if (!sh) return {headers: [], rows: []};
+  ensureDeliveryCols(sh);
+
+  var data = sh.getDataRange().getValues();
+  var headers = data.length ? data[0] : [];
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0]) rows.push(data[i]);
+  }
+
+  var chunks = Math.max(1, Math.ceil(rows.length / ORDERS_CACHE_CHUNK));
+  var puts = {};
+  for (var c = 0; c < chunks; c++) {
+    puts[ORDERS_CACHE_PREFIX + '_c' + c] = JSON.stringify(rows.slice(c * ORDERS_CACHE_CHUNK, (c + 1) * ORDERS_CACHE_CHUNK));
+  }
+  puts[ORDERS_CACHE_PREFIX + '_meta'] = JSON.stringify({chunks: rows.length ? chunks : 0, headers: headers});
+  cache.putAll(puts, CACHE_TTL);
+
+  return {headers: headers, rows: rows};
+}
+
+function clearOrdersCache() {
+  var cache = CacheService.getScriptCache();
+  var metaStr = cache.get(ORDERS_CACHE_PREFIX + '_meta');
+  var keys = [ORDERS_CACHE_PREFIX + '_meta'];
+  if (metaStr) {
+    var meta = JSON.parse(metaStr);
+    for (var i = 0; i < meta.chunks; i++) keys.push(ORDERS_CACHE_PREFIX + '_c' + i);
+  }
+  cache.removeAll(keys);
+}
+
 // Normalizes a courier-zone value for comparison: trims whitespace and
 // uppercases, so "k1"/"K1"/" K1 " all compare equal as "K1".
 function normCourier(v) {
@@ -410,17 +553,14 @@ function normDeliveryDate(v) {
 
 // Looks up the "courier" zone of a client in Mijozlar by id.
 function lookupClientCourier(clientId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(CLIENTS_SHEET);
-  if (!sh) return '';
-  var data = sh.getDataRange().getValues();
-  var headers = data[0];
+  var raw = getClientsRaw();
+  var headers = raw.headers;
   var idIdx = headers.indexOf('id');
   var crIdx = headers.indexOf('courier');
   if (idIdx < 0 || crIdx < 0) return '';
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][idIdx]) === String(clientId)) {
-      return normCourier(data[i][crIdx]);
+  for (var i = 0; i < raw.rows.length; i++) {
+    if (String(raw.rows[i][idIdx]) === String(clientId)) {
+      return normCourier(raw.rows[i][crIdx]);
     }
   }
   return '';
@@ -439,12 +579,9 @@ function lookupClientByPhone(phone) {
   var target = last9Digits(phone);
   if (target.length < 9) return {found: false};
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(CLIENTS_SHEET);
-  if (!sh) return {found: false};
-
-  var data = sh.getDataRange().getValues();
-  var headers = data[0];
+  var raw = getClientsRaw();
+  var headers = raw.headers;
+  if (!headers.length) return {found: false};
   var idIdx = headers.indexOf('id');
   var nameIdx = headers.indexOf('name');
   var phoneIdx = headers.indexOf('phone');
@@ -452,12 +589,12 @@ function lookupClientByPhone(phone) {
   var addrIdx = headers.indexOf('addr');
   var addrNormIdx = headers.indexOf('addrNorm');
 
-  for (var i = 1; i < data.length; i++) {
-    if (!data[i][idIdx]) continue;
-    if (last9Digits(data[i][phoneIdx]) === target ||
-        (phone2Idx >= 0 && last9Digits(data[i][phone2Idx]) === target)) {
-      var addr = (addrNormIdx >= 0 && data[i][addrNormIdx]) ? data[i][addrNormIdx] : (addrIdx >= 0 ? data[i][addrIdx] : '');
-      return {found: true, clientId: data[i][idIdx], name: data[i][nameIdx] || '', addr: addr || ''};
+  for (var i = 0; i < raw.rows.length; i++) {
+    var row = raw.rows[i];
+    if (last9Digits(row[phoneIdx]) === target ||
+        (phone2Idx >= 0 && last9Digits(row[phone2Idx]) === target)) {
+      var addr = (addrNormIdx >= 0 && row[addrNormIdx]) ? row[addrNormIdx] : (addrIdx >= 0 ? row[addrIdx] : '');
+      return {found: true, clientId: row[idIdx], name: row[nameIdx] || '', addr: addr || ''};
     }
   }
   return {found: false};
@@ -498,6 +635,7 @@ function addDelivery(data) {
     set('courier', lookupClientCourier(data.clientId));
 
     sh.appendRow(row);
+    clearOrdersCache();
     return {success: true, id: deliveryId};
   } finally {
     lock.releaseLock();
@@ -551,6 +689,7 @@ function addCourierOrder(data) {
     set('phone', data.phone || '');
 
     sh.appendRow(row);
+    clearOrdersCache();
     return {success: true, id: deliveryId, clientId: lookup.found ? lookup.clientId : '', clientFound: lookup.found};
   } finally {
     lock.releaseLock();
@@ -563,16 +702,10 @@ function addCourierOrder(data) {
 // deliveries are returned. Deliveries with no courier zone set (legacy
 // rows) are visible to every courier.
 function getDeliveries(deliveryDate, courier) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(ORDERS_SHEET);
-  if (!sh) return {deliveries: []};
+  var raw = getOrdersRaw();
+  var headers = raw.headers;
+  if (!headers.length) return {deliveries: []};
 
-  ensureDeliveryCols(sh);
-
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) return {deliveries: []};
-
-  var headers = data[0];
   var statusIdx = headers.indexOf('status');
   var ddIdx = headers.indexOf('deliveryDate');
   var crIdx = headers.indexOf('courier');
@@ -580,9 +713,8 @@ function getDeliveries(deliveryDate, courier) {
   var courierFilter = normCourier(courier);
 
   var deliveries = [];
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (!row[0]) continue;
+  for (var i = 0; i < raw.rows.length; i++) {
+    var row = raw.rows[i];
     if (row[statusIdx] !== 'pending') continue;
     var rowDeliveryDate = normDeliveryDate(row[ddIdx]);
     if (deliveryDate && rowDeliveryDate !== String(deliveryDate)) continue;
@@ -627,6 +759,7 @@ function completeDelivery(deliveryId, qty, price, sum, payMethod) {
         if (sum !== undefined)       sh.getRange(i+1, sumIdx+1).setValue(sum);
         if (payMethod !== undefined) sh.getRange(i+1, payIdx+1).setValue(payMethod);
         sh.getRange(i+1, statusIdx+1).setValue('done');
+        clearOrdersCache();
         return {success: true, id: deliveryId};
       }
     }
@@ -664,11 +797,18 @@ function fixDeliveryCouriers() {
       fixed++;
     }
   }
+  if (fixed) clearOrdersCache();
   Logger.log('Tuzatildi: ' + fixed + ', Mijozda zona yoq: ' + noZone);
 }
 
 // ── GET STATS ─────────────────────────────────────────────────
+var STATS_CACHE_KEY = 'stats_v1';
+
 function getStats() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(STATS_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var cs = ss.getSheetByName(CLIENTS_SHEET);
   var qs = ss.getSheetByName(CALLS_SHEET);
@@ -689,7 +829,13 @@ function getStats() {
     }
   }
 
-  return {totalClients: clients, totalCalls: calls, todayCalls: todayCalls, date: today};
+  var result = {totalClients: clients, totalCalls: calls, todayCalls: todayCalls, date: today};
+  cache.put(STATS_CACHE_KEY, JSON.stringify(result), CACHE_TTL);
+  return result;
+}
+
+function clearStatsCache() {
+  CacheService.getScriptCache().remove(STATS_CACHE_KEY);
 }
 
 // ── ANALYTICS (boss) ──────────────────────────────────────────
@@ -702,15 +848,10 @@ function getAnalytics(month, year, courier) {
   var empty = {totalOrders: 0, totalRevenue: 0, totalBottles: 0, doneCount: 0, pendingCount: 0,
                 byDay: [], byCourier: [], bySource: {operator: 0, courier: 0}};
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName(ORDERS_SHEET);
-  if (!sh) return empty;
+  var raw = getOrdersRaw();
+  var headers = raw.headers;
+  if (!headers.length) return empty;
 
-  ensureDeliveryCols(sh);
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) return empty;
-
-  var headers = data[0];
   var dateIdx = headers.indexOf('date');
   var qtyIdx = headers.indexOf('qty');
   var sumIdx = headers.indexOf('sum');
@@ -725,9 +866,8 @@ function getAnalytics(month, year, courier) {
   var totalOrders = 0, totalRevenue = 0, totalBottles = 0, doneCount = 0, pendingCount = 0;
   var dayMap = {}, courierMap = {}, sourceCount = {operator: 0, courier: 0};
 
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    if (!row[0]) continue;
+  for (var i = 0; i < raw.rows.length; i++) {
+    var row = raw.rows[i];
 
     var dateStr = normDeliveryDate(row[dateIdx]);
     var parts = dateStr.split('.');
@@ -835,5 +975,6 @@ function removeDuplicateDeliveries() {
     sh.deleteRow(toDelete[m].rowIndex);
   }
 
+  clearOrdersCache();
   Logger.log('Ochirildi: ' + toDelete.length + ' qator');
 }

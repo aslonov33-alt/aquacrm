@@ -558,7 +558,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-06-15-2';
+var APP_VERSION='2026-06-15-3';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -584,6 +584,8 @@ var APP_VERSION='2026-06-15-2';
 // ═══ STATE ═══
 var API='', OP='Operator', ROLE='op';
 var D=[], ST={}, CF='all', CID=null, PG=40, OF=0, FL=[];
+var CLIENTS_CACHE_KEY='aq_clients_v1';
+var CLIENTS_CACHE_TTL=3600000; // 1 soat
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
 var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
 var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
@@ -626,41 +628,81 @@ function api(action,data,cb){
     .catch(function(e){cb&&cb(null,e.toString())})
 }
 
-function loadClients(){
+function saveClientsCache(){
+  try{localStorage.setItem(CLIENTS_CACHE_KEY,JSON.stringify({ts:Date.now(),data:D}))}catch(e){}
+}
+function loadClientsCache(){
+  try{
+    var raw=localStorage.getItem(CLIENTS_CACHE_KEY)
+    if(!raw)return null
+    var obj=JSON.parse(raw)
+    if(!obj||!obj.data||!obj.data.length)return null
+    return obj
+  }catch(e){return null}
+}
+
+function loadClients(force){
   if(!API){
     $('clist').innerHTML='<div style="text-align:center;padding:30px"><div style="font-size:40px">⚙️</div><div style="font-size:15px;font-weight:700;margin-top:10px;color:var(--blue)">Sozlamalarni kiriting</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Pastdagi ⚙️ tugmani bosing</div></div>'
     return
   }
   if(LOADING) return;
+
+  var cached=force?null:loadClientsCache()
+  if(cached){
+    D=cached.data
+    processD()
+    renderAll()
+    if(Date.now()-cached.ts<CLIENTS_CACHE_TTL)return
+    // Kesh eskirgan — fonda yangilanadi, royxat ekranda qoladi
+    REFRESH_BUF=[]
+    LOADING=true
+    loadPage(0)
+    return
+  }
+
   D=[]
-  LOADING=false;
+  REFRESH_BUF=null
+  LOADING=true;
   $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... 0</div>'
   loadPage(0)
 }
 
 var LOADING=false;
+var REFRESH_BUF=null;
 function loadPage(offset){
-  if(LOADING && offset===0) return;
-  if(offset===0) LOADING=true;
   api('getClients',{offset:offset,limit:500},function(data,err){
     if(err||!data||data.error){
       LOADING=false;
+      if(REFRESH_BUF){REFRESH_BUF=null;return}
       $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+(err||data.error)+'</div>'
       return
     }
     var batch=data.clients||[]
-    // Prevent duplicates
-    var existingIds=new Set(D.map(function(c){return c.id}));
-    batch=batch.filter(function(c){return !existingIds.has(c.id)});
-    D=D.concat(batch)
-    processD()
-    $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... '+D.length+' / '+data.total+'</div>'
+    if(REFRESH_BUF){
+      REFRESH_BUF=REFRESH_BUF.concat(batch)
+    } else {
+      // Prevent duplicates
+      var existingIds=new Set(D.map(function(c){return c.id}));
+      batch=batch.filter(function(c){return !existingIds.has(c.id)});
+      D=D.concat(batch)
+      processD()
+      $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... '+D.length+' / '+data.total+'</div>'
+      if(offset===0)renderAll()
+    }
     if(data.hasMore){
       loadPage(offset+500)
     } else {
       LOADING=false;
-      renderAll()
-      toast('Yuklandi: '+D.length+' ta mijoz')
+      if(REFRESH_BUF){
+        D=REFRESH_BUF;REFRESH_BUF=null
+        processD();renderAll()
+        toast('Royxat yangilandi: '+D.length+' ta mijoz')
+      } else {
+        renderAll()
+        toast('Yuklandi: '+D.length+' ta mijoz')
+      }
+      saveClientsCache()
     }
   })
 }
@@ -1066,6 +1108,7 @@ function renderCourier(){
 
 function loadDeliveries(){
   if(!API){renderCourier();return}
+  $('courier-list').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda...</div>'
   var filterDate=null
   if(ROLE==='co')filterDate=todayUz()
   else if(COURIER_FILTER==='today')filterDate=todayUz()
@@ -1253,8 +1296,15 @@ function loadAnalytics(){
   var parts=monthVal.split('-')
   var year=parseInt(parts[0]),month=parseInt(parts[1])
   var courier=$('hr-courier').value
+  $('hr-day-table').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px"><div class="sp" style="margin:0 auto"></div></td></tr>'
+  $('hr-courier-table').innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px"><div class="sp" style="margin:0 auto"></div></td></tr>'
   api('getAnalytics',{month:month,year:year,courier:courier},function(data,err){
-    if(err||!data||data.error){toast('Xatolik: '+(err||(data&&data.error)));return}
+    if(err||!data||data.error){
+      toast('Xatolik: '+(err||(data&&data.error)))
+      $('hr-day-table').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--red)">Xatolik</td></tr>'
+      $('hr-courier-table').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--red)">Xatolik</td></tr>'
+      return
+    }
     renderAnalytics(data)
   })
 }
@@ -1436,7 +1486,7 @@ window.addEventListener('DOMContentLoaded',function(){
   $('ni-profile').addEventListener('click',function(){showSc('profile')})
   $('ni-hisobot').addEventListener('click',function(){showSc('hisobot')})
   $('prof-btn').addEventListener('click',function(){showSc('profile')})
-  $('sync-btn').addEventListener('click',function(){loadClients();syncStats()})
+  $('sync-btn').addEventListener('click',function(){loadClients(true);syncStats()})
   $('gmap-btn').addEventListener('click',function(){window.open('https://www.google.com/maps','_blank')})
 
   // Filters
