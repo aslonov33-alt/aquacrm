@@ -558,7 +558,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-06-15-1';
+var APP_VERSION='2026-06-15-2';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -603,6 +603,19 @@ function fmtDateUz(d){return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.ge
 function todayUz(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return fmtDateUz(d)}
 function todayISO(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())}
 function inputDateToUz(val){var p=(val||'').split('-');return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):''}
+function setBtnBusy(btn,busy,busyText){
+  if(!btn)return
+  if(busy){
+    if(btn.dataset.origText===undefined)btn.dataset.origText=btn.textContent
+    btn.disabled=true
+    btn.style.opacity='0.6'
+    btn.textContent=busyText
+  } else {
+    btn.disabled=false
+    btn.style.opacity=''
+    if(btn.dataset.origText!==undefined){btn.textContent=btn.dataset.origText;delete btn.dataset.origText}
+  }
+}
 
 // ═══ API ═══
 function api(action,data,cb){
@@ -1054,7 +1067,8 @@ function renderCourier(){
 function loadDeliveries(){
   if(!API){renderCourier();return}
   var filterDate=null
-  if(COURIER_FILTER==='today')filterDate=todayUz()
+  if(ROLE==='co')filterDate=todayUz()
+  else if(COURIER_FILTER==='today')filterDate=todayUz()
   else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
   var params={deliveryDate:filterDate}
   if(ROLE==='co')params.courier='K'+COURIER_ZONE
@@ -1132,18 +1146,25 @@ function confirmDelivery(){
   }
 }
 
-function addDeliveryRequest(deliveryDate){
+function addDeliveryRequest(deliveryDate,btn){
   if(!CURR_ASSIGN)return
   if(!API){toast('API sozlanmagan!');return}
+  var btnIds=['da-today','da-tomorrow','da-custom']
+  btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=true})
+  setBtnBusy(btn,true,'Qoshilmoqda...')
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
   api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
     if(data&&data.success){
-      toast("Yetkazishga qo'shildi 🚚")
+      toast('Qoshildi')
+      setBtnBusy(btn,false)
+      btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=false})
       $('deliv-assign-box').style.display='none'
       $('modal').className='mo'
       CURR_ASSIGN=null
-      if(ROLE==='co')loadDeliveries()
+      loadDeliveries()
     } else {
+      setBtnBusy(btn,false)
+      btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=false})
       toast('Xatolik! Qayta urinib koring')
     }
   })
@@ -1157,6 +1178,7 @@ function openCourierOrderModal(){
   $('co-price').value=15000
   $('co-note').value=''
   $('co-date').value=todayISO()
+  setBtnBusy($('co-save'),false)
   updateCoTotal()
   updateCoPayBtns()
   $('co-modal').className='mo on'
@@ -1182,6 +1204,7 @@ function lookupCoPhone(){
       CO_CLIENT_ID=data.clientId||''
       if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
       if(data.name&&!$('co-name').value.trim())$('co-name').value=data.name
+      if(data.addr&&!$('co-addr').value.trim())$('co-addr').value=data.addr
     } else {
       CO_CLIENT_ID=''
       if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
@@ -1193,6 +1216,8 @@ function saveCourierOrder(){
   var name=$('co-name').value.trim()
   if(!name){toast('Mijoz ismini kiriting!');return}
   if(!API){toast('API sozlanmagan!');return}
+  var btn=$('co-save')
+  if(btn&&btn.disabled)return
   var price=parseInt($('co-price').value)||0
   var dateVal=$('co-date').value
   var deliveryDate=dateVal?inputDateToUz(dateVal):todayUz()
@@ -1202,12 +1227,15 @@ function saveCourierOrder(){
     deliveryDate:deliveryDate,note:$('co-note').value.trim(),
     courier:'K'+COURIER_ZONE,operator:OP
   }
+  setBtnBusy(btn,true,'Qoshilmoqda...')
   api('addCourierOrder',data,function(res,err){
     if(res&&res.success){
-      toast('Buyurtma qoshildi')
+      toast('Qoshildi')
+      setBtnBusy(btn,false)
       $('co-modal').className='mo'
       loadDeliveries()
     } else {
+      setBtnBusy(btn,false)
       toast('Xatolik! Qayta urinib koring')
     }
   })
@@ -1363,7 +1391,9 @@ function applyLogin(role, num, name){
     if(nhis)nhis.style.display=hisobot?'flex':'none';
   }
 
+  var cfp=$('cf-pills');
   if(role==='op'){
+    if(cfp)cfp.style.display='';
     setNav(true,true,true,true,true,false);
     showSc('home');
   } else if(role==='boss'){
@@ -1371,6 +1401,8 @@ function applyLogin(role, num, name){
     showSc('hisobot');
   } else {
     COURIER_ZONE=num;
+    COURIER_FILTER='today';
+    if(cfp)cfp.style.display='none';
     setNav(false,false,true,true,true,false);
     showSc('courier');
   }
@@ -1448,12 +1480,12 @@ window.addEventListener('DOMContentLoaded',function(){
   on('pay-trans','click',function(){CURR_PAY='trans';updatePayBtns()})
   on('pay-pre','click',function(){CURR_PAY='pre';updatePayBtns()})
   on('dm-done','click',confirmDelivery)
-  on('da-today','click',function(){addDeliveryRequest(todayUz())})
-  on('da-tomorrow','click',function(){addDeliveryRequest(todayUz(1))})
+  on('da-today','click',function(){addDeliveryRequest(todayUz(),this)})
+  on('da-tomorrow','click',function(){addDeliveryRequest(todayUz(1),this)})
   on('da-custom','click',function(){
     var val=$('da-date').value
     if(!val){toast('Sanani tanlang!');return}
-    addDeliveryRequest(inputDateToUz(val))
+    addDeliveryRequest(inputDateToUz(val),this)
   })
   $('cf-pills').addEventListener('click',function(e){
     var p=e.target.closest('.pill');if(!p)return

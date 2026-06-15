@@ -434,7 +434,7 @@ function last9Digits(phone) {
 }
 
 // Looks up a client in Mijozlar by phone (last 9 digits, matches phone or phone2).
-// Returns {found:true, clientId, name} or {found:false}.
+// Returns {found:true, clientId, name, addr} or {found:false}.
 function lookupClientByPhone(phone) {
   var target = last9Digits(phone);
   if (target.length < 9) return {found: false};
@@ -449,12 +449,15 @@ function lookupClientByPhone(phone) {
   var nameIdx = headers.indexOf('name');
   var phoneIdx = headers.indexOf('phone');
   var phone2Idx = headers.indexOf('phone2');
+  var addrIdx = headers.indexOf('addr');
+  var addrNormIdx = headers.indexOf('addrNorm');
 
   for (var i = 1; i < data.length; i++) {
     if (!data[i][idIdx]) continue;
     if (last9Digits(data[i][phoneIdx]) === target ||
         (phone2Idx >= 0 && last9Digits(data[i][phone2Idx]) === target)) {
-      return {found: true, clientId: data[i][idIdx], name: data[i][nameIdx] || ''};
+      var addr = (addrNormIdx >= 0 && data[i][addrNormIdx]) ? data[i][addrNormIdx] : (addrIdx >= 0 ? data[i][addrIdx] : '');
+      return {found: true, clientId: data[i][idIdx], name: data[i][nameIdx] || '', addr: addr || ''};
     }
   }
   return {found: false};
@@ -774,4 +777,63 @@ function getAnalytics(month, year, courier) {
   return {totalOrders: totalOrders, totalRevenue: totalRevenue, totalBottles: totalBottles,
           doneCount: doneCount, pendingCount: pendingCount,
           byDay: byDay, byCourier: byCourier, bySource: sourceCount};
+}
+
+// ── ONE-OFF: REMOVE DUPLICATE PENDING DELIVERIES ───────────────
+// Run MANUALLY from the Apps Script editor (select removeDuplicateDeliveries
+// in the function dropdown next to "Run" — no deploy needed, not an API action).
+// Finds groups of Buyurtmalar rows with the same clientId + deliveryDate and
+// status='pending', keeps the row with the smallest id in each group and
+// deletes the rest. Rows with status='done' or empty clientId are never
+// touched. Logs a preview (groups found / rows to delete) before deleting,
+// then logs how many rows were actually removed — check "Выполнения"
+// (Executions) for the output. Google Sheets keeps version history
+// (Файл → История версий) if you need to undo.
+function removeDuplicateDeliveries() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ORDERS_SHEET);
+  if (!sh) { Logger.log('Buyurtmalar sheet topilmadi'); return; }
+
+  ensureDeliveryCols(sh);
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) { Logger.log('Buyurtmalar bosh'); return; }
+
+  var headers = data[0];
+  var idIdx = headers.indexOf('id');
+  var clientIdIdx = headers.indexOf('clientId');
+  var statusIdx = headers.indexOf('status');
+  var dateIdx = headers.indexOf('deliveryDate');
+
+  var groups = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[idIdx]) continue;
+    if (row[statusIdx] !== 'pending') continue;
+    var clientId = row[clientIdIdx];
+    if (clientId === '' || clientId === null || clientId === undefined) continue;
+    var dateStr = normDeliveryDate(row[dateIdx]);
+    var key = String(clientId) + '|' + dateStr;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({rowIndex: i + 1, id: row[idIdx]});
+  }
+
+  var toDelete = [];
+  var dupGroups = 0;
+  for (var key in groups) {
+    var items = groups[key];
+    if (items.length < 2) continue;
+    dupGroups++;
+    items.sort(function(a, b) { return a.id - b.id; });
+    for (var k = 1; k < items.length; k++) toDelete.push(items[k]);
+  }
+
+  Logger.log('Dublikat guruhlari: ' + dupGroups + ', ochirish uchun qatorlar: ' + toDelete.length);
+  if (!toDelete.length) { Logger.log('Ochirish kerak emas.'); return; }
+
+  toDelete.sort(function(a, b) { return b.rowIndex - a.rowIndex; });
+  for (var m = 0; m < toDelete.length; m++) {
+    sh.deleteRow(toDelete[m].rowIndex);
+  }
+
+  Logger.log('Ochirildi: ' + toDelete.length + ' qator');
 }
