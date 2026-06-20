@@ -107,7 +107,8 @@ function ensureStatusCols(sh) {
 // (4900+ rows) on every getClients/getStats/lookup call. Any write to
 // Mijozlar (updateClient, takeNextClient, setClientStatus, logCall)
 // must call clearClientsCache() afterwards.
-var CACHE_TTL = 21600; // 6 hours — CacheService max
+var CACHE_TTL = 21600;        // 6 hours — clients (rarely change)
+var ORDERS_CACHE_TTL = 30;    // 30 sec — orders/deliveries (change frequently)
 var CLIENTS_CACHE_PREFIX = 'mij_v1';
 var CLIENTS_CACHE_CHUNK = 200; // rows per cache chunk
 
@@ -518,7 +519,7 @@ function getOrdersRaw() {
     puts[ORDERS_CACHE_PREFIX + '_c' + c] = JSON.stringify(rows.slice(c * ORDERS_CACHE_CHUNK, (c + 1) * ORDERS_CACHE_CHUNK));
   }
   puts[ORDERS_CACHE_PREFIX + '_meta'] = JSON.stringify({chunks: rows.length ? chunks : 0, headers: headers});
-  cache.putAll(puts, CACHE_TTL);
+  cache.putAll(puts, ORDERS_CACHE_TTL);
 
   return {headers: headers, rows: rows};
 }

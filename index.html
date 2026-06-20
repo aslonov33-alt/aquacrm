@@ -622,10 +622,14 @@ function setBtnBusy(btn,busy,busyText){
 // ═══ API ═══
 function api(action,data,cb){
   if(!API){cb&&cb(null,'URL kiritilmagan');return}
-  fetch(API+'?action='+action,{method:'POST',body:JSON.stringify(Object.assign({action:action},data))})
-    .then(function(r){return r.json()})
+  var ctrl=typeof AbortController!=='undefined'?new AbortController():null
+  var tid=ctrl?setTimeout(function(){ctrl.abort()},25000):null
+  var opts={method:'POST',body:JSON.stringify(Object.assign({action:action},data))}
+  if(ctrl)opts.signal=ctrl.signal
+  fetch(API+'?action='+action,opts)
+    .then(function(r){if(tid)clearTimeout(tid);return r.json()})
     .then(function(d){cb&&cb(d,null)})
-    .catch(function(e){cb&&cb(null,e.toString())})
+    .catch(function(e){if(tid)clearTimeout(tid);cb&&cb(null,e.toString())})
 }
 
 function saveClientsCache(){
@@ -1110,12 +1114,20 @@ function loadDeliveries(){
   if(!API){renderCourier();return}
   $('courier-list').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda...</div>'
   var filterDate=null
-  if(ROLE==='co')filterDate=todayUz()
-  else if(COURIER_FILTER==='today')filterDate=todayUz()
-  else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
+  // Courier (ROLE==='co'): no date filter — show ALL pending for their zone
+  // so orders from previous days (still pending) are visible.
+  // Operator view uses COURIER_FILTER pills.
+  if(ROLE!=='co'){
+    if(COURIER_FILTER==='today')filterDate=todayUz()
+    else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
+  }
   var params={deliveryDate:filterDate}
   if(ROLE==='co')params.courier='K'+COURIER_ZONE
   api('getDeliveries',params,function(data,err){
+    if(err){
+      $('courier-list').innerHTML='<div style="text-align:center;color:var(--red);padding:30px;font-size:13px">Yuklab bo\'lmadi.<br>Internet aloqasini tekshiring.</div>'
+      return
+    }
     if(data&&data.deliveries){
       DELIVERIES=data.deliveries.map(function(d){
         return {id:d.id,clientId:d.clientId,clientName:d.clientName,qty:parseInt(d.qty)||1,deliveryDate:d.deliveryDate||'',address:d.address||'',phone:d.phone||''}
