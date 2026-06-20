@@ -558,7 +558,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-06-15-3';
+var APP_VERSION='2026-06-20-1';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -1203,6 +1203,7 @@ function confirmDelivery(){
 
 function addDeliveryRequest(deliveryDate,btn){
   if(!CURR_ASSIGN)return
+  if(!deliveryDate){toast('Sana aniqlanmadi!');return}
   if(!API){toast('API sozlanmagan!');return}
   var btnIds=['da-today','da-tomorrow','da-custom']
   btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=true})
@@ -1210,7 +1211,7 @@ function addDeliveryRequest(deliveryDate,btn){
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
   api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
     if(data&&data.success){
-      toast('Qoshildi')
+      toast('Yetkazish qoshildi: '+deliveryDate)
       setBtnBusy(btn,false)
       btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=false})
       $('deliv-assign-box').style.display='none'
