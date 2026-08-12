@@ -1482,6 +1482,7 @@ function logout(){
   var inp=document.getElementById('login-pass');
   if(inp){inp.value='';setTimeout(function(){inp.focus();},300);}
   document.getElementById('login-err').textContent='';
+  initLogin();
 }
 
 window.addEventListener('DOMContentLoaded',function(){
