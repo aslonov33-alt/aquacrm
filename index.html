@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1e88e5">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.svg">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -591,7 +596,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-08-16-10';
+var APP_VERSION='2026-08-16-12';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -2147,6 +2152,14 @@ window.addEventListener('DOMContentLoaded',function(){
   $('tbs').textContent='Bosh sahifa'
   loadClients()
   if(API)syncStats()
+  // Register Service Worker with base handling (works on GitHub Pages under /aquacrm/)
+  try{
+    if('serviceWorker' in navigator){
+      var base = '/';
+      try{ var p = location.pathname.split('/'); if(p.length>1 && p[1]==='aquacrm') base = '/aquacrm/'; }catch(e){}
+      navigator.serviceWorker.register(base + 'sw.js').then(function(){ console.log('ServiceWorker registered at', base + 'sw.js') }).catch(function(e){ console.warn('SW registration failed', e) })
+    }
+  }catch(e){console.warn('SW register error',e)}
 })
 </script>
 </body>
