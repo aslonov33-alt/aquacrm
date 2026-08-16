@@ -560,7 +560,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-08-16-5';
+var APP_VERSION='2026-08-16-6';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -717,60 +717,68 @@ function loadClients(force){
   REFRESH_BUF=null
   LOADING=true;
   $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... 0</div>'
-  // If we have Supabase, fetch total count first to update counters quickly
+  // If we have Supabase, fetch total count first to update UI counters quickly
   if(supabaseClient){
     supabaseClient.from('clients').select('*', { count: 'exact', head: true }).then(function(cntResp){
       try{
-        var total = typeof cntResp.count==='number'?cntResp.count:null
+        var total = typeof cntResp.count==='number'?cntResp.count:null;
         if(total!==null){
-          // update UI counters immediately
+          // update UI counters immediately (badge, stats, profile)
           try{ $('s3').textContent = total.toLocaleString(); }catch(e){}
           try{ $('pp1').textContent = total.toLocaleString(); }catch(e){}
           try{ $('bu').textContent = total; }catch(e){}
+          try{ $('pp1').textContent = total.toLocaleString(); }catch(e){}
         }
-      }catch(e){}
-    }).catch(function(e){/* ignore count error */})
+      }catch(e){ console.warn('count parse error', e) }
+    }).catch(function(e){ console.warn('count request failed', e) })
   }
   loadPage(0)
 }
 
 // Server-side search using Supabase .ilike on name/phone/phone2
 function searchClients(q){
-  q = (q||'').trim()
+  q = (q||'').trim();
   if(!q){ // empty - load cached/default
-    loadClients(false)
-    return
+    loadClients(false);
+    return;
   }
+  // Prefer direct Supabase search so results are returned regardless of local cache
   if(supabaseClient){
-    $('clist').innerHTML='<div class="loading"><div class="sp"></div>Qidirilmoqda...</div>'
+    $('clist').innerHTML = '<div class="loading"><div class="sp"></div>Qidirilmoqda...</div>';
     try{
-      var raw = q
-      var digits = (raw||'').replace(/\D/g,'')
-      var clauses = []
-      // name search (case-insensitive, substring)
-      clauses.push('name.ilike.%' + raw + '%')
-      // phone search: try both full digits and last-9 digits if user typed numbers
-      if(digits && digits.length>=3){
-        var last9 = digits.length>9?digits.slice(-9):digits
-        clauses.push('phone.ilike.%' + last9 + '%')
-        clauses.push('phone.ilike.%' + digits + '%')
-        clauses.push('phone2.ilike.%' + last9 + '%')
-        clauses.push('phone2.ilike.%' + digits + '%')
+      var raw = q;
+      var digits = (raw||'').replace(/\D/g,'');
+      var clauses = [];
+      // name substring
+      clauses.push("name.ilike.%" + raw + "%");
+      if(digits){
+        var last9 = digits.length>9?digits.slice(-9):digits;
+        clauses.push("phone.ilike.%" + last9 + "%");
+        clauses.push("phone.ilike.%" + digits + "%");
+        clauses.push("phone2.ilike.%" + last9 + "%");
+        clauses.push("phone2.ilike.%" + digits + "%");
       } else {
-        clauses.push('phone.ilike.%' + raw + '%')
-        clauses.push('phone2.ilike.%' + raw + '%')
+        clauses.push("phone.ilike.%" + raw + "%");
+        clauses.push("phone2.ilike.%" + raw + "%");
       }
-      var orStr = clauses.join(' , ')
-      supabaseClient.from('clients').select('*').or(orStr).limit(500).then(function(resp){
-        if(resp.error){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+resp.error.message+'</div>';return}
-        D = resp.data || []
+      var orStr = clauses.join(',');
+      supabaseClient.from('clients').select('*').or(orStr).limit(50).then(function(resp){
+        if(resp.error){
+          $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+resp.error.message+'</div>';
+          return;
+        }
+        D = resp.data || [];
         processD(); renderAll(); saveClientsCache();
-      }).catch(function(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'})
-    }catch(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'}
-    return
+      }).catch(function(e){
+        $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>';
+      });
+    }catch(e){
+      $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>';
+    }
+    return;
   }
-  // fallback to local filtering
-  renderC(true)
+  // fallback to local filtering when Supabase is not available
+  renderC(true);
 }
 
 var LOADING=false;
@@ -1533,10 +1541,11 @@ function updateCoPayBtns(){
 function lookupCoPhone(){
   var phone=$('co-phone').value
   var digits=(phone||'').replace(/\D/g,'')
-  if(digits.length<9||(!API && !supabaseClient))return
+  if((!digits||digits.length<3) && (!API && !supabaseClient)) return
   if(supabaseClient){
-    var q = supabaseClient.from('clients').select('*').or("phone.ilike.%"+digits+"% , phone2.ilike.%"+digits+"%")
-    q.then(function(resp){
+    var last9 = digits.length>9?digits.slice(-9):digits
+    var orStr = "phone.ilike.%"+last9+"%,phone2.ilike.%"+last9+"%"
+    supabaseClient.from('clients').select('*').or(orStr).limit(5).then(function(resp){
       if(resp.error||!resp.data||!resp.data.length){ CO_CLIENT_ID=''; if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()} return }
       var data = resp.data[0]
       CO_CLIENT_ID=data.id||''
