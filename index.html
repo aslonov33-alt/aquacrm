@@ -912,7 +912,8 @@ function stats(){
   if(!$('sdot').classList.contains('on'))$('s4').textContent=cal
   $('s5').textContent=left.toLocaleString()
   $('s6').textContent=cal+' / '+D.length;$('pb').style.width=pct+'%'
-  $('bu').textContent=urg
+  // Show total clients in nav badge
+  try{ $('bu').textContent = D.length.toLocaleString(); }catch(e){}
   $('pp1').textContent=D.length.toLocaleString();$('pp2').textContent=urg
   $('pp3').textContent=wn;$('pp4').textContent=pre;
 }
