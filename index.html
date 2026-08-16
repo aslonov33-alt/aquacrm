@@ -560,7 +560,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-08-16-3';
+var APP_VERSION='2026-08-16-4';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -647,6 +647,12 @@ function debounce(fn, wait){
   }
   wrapped.cancel=function(){ if(t){clearTimeout(t);t=null} }
   return wrapped
+}
+
+// Generate a reasonably-unique numeric id for inserts when DB doesn't autogenerate
+function genId(){
+  // timestamp milliseconds * 1000 + random 0..999 to reduce collision chance
+  return Date.now()*1000 + Math.floor(Math.random()*1000)
 }
 
 // ═══ API ═══
@@ -1206,7 +1212,7 @@ function saveCall(){
   $('modal').className='mo'
   renderAll()
   if(supabaseClient){
-    supabaseClient.from('calls').insert([{client_id:CID,client_name:c.name,phone:c.phone,operator:OP,status:status,note:note,call_date:dateStr,call_time:timeStr}]).then(function(res){
+    supabaseClient.from('calls').insert([{id: genId(), client_id:CID,client_name:c.name,phone:c.phone,operator:OP,status:status,note:note,call_date:dateStr,call_time:timeStr}]).then(function(res){
       if(res.error){toast('Xatolik: '+res.error.message)}else{
         // update client's last call info
         supabaseClient.from('clients').update({last_call_date:dateStr+' '+timeStr,last_call_status:status}).eq('id',CID).then(function(up){
@@ -1456,7 +1462,7 @@ function addDeliveryRequest(deliveryDate,btn){
   setBtnBusy(btn,true,'Qoshilmoqda...')
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
   if(supabaseClient){
-    supabaseClient.from('orders').insert([{client_id:clientId,client_name:clientName,qty:1,delivery_date:deliveryDate,status:'pending',operator:OP}]).then(function(res){
+    supabaseClient.from('orders').insert([{id: genId(), client_id:clientId,client_name:clientName,qty:1,delivery_date:deliveryDate,status:'pending',operator:OP}]).then(function(res){
       if(res.error){
         setBtnBusy(btn,false);btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}});toast('Xatolik: '+res.error.message);return
       }
@@ -1559,7 +1565,7 @@ function saveCourierOrder(){
   setBtnBusy(btn,true,'Qoshilmoqda...')
   if(supabaseClient){
     supabaseClient.from('orders').insert([{
-      client_name:data.clientName,address:data.address,phone:data.phone,qty:data.qty,price:data.price,pay_method:data.payMethod,delivery_date:data.deliveryDate,note:data.note,courier:data.courier,status:'pending',operator:data.operator
+      id: genId(), client_name:data.clientName,address:data.address,phone:data.phone,qty:data.qty,price:data.price,pay_method:data.payMethod,delivery_date:data.deliveryDate,note:data.note,courier:data.courier,status:'pending',operator:data.operator
     }]).then(function(res){
       if(res.error){setBtnBusy(btn,false);toast('Xatolik: '+res.error.message);return}
       toast('Qoshildi')
