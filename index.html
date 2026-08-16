@@ -157,6 +157,8 @@ textarea.fin{resize:none}
 </head>
 <body>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
 
 <!-- LOGIN SCREEN -->
 <div class="login-screen" id="login-screen">
@@ -558,7 +560,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-06-20-1';
+var APP_VERSION='2026-08-16-2';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -591,6 +593,20 @@ var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
 var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
 var COURIER_NAMES={K1:'Shermat (K1)',K2:'Mahsum (K2)'};
 
+// ═══ SUPABASE CLIENT ═══
+// Initialize Supabase client for frontend usage
+var SUPABASE_URL='https://aimuonxwddmqhifqxnll.supabase.co';
+var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpbXVvbnh3ZGRtcWhpZnF4bmxsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4NjE0OTksImV4cCI6MjEwMjQzNzQ5OX0.C00apGbIcVal1onZyZDt6jrUne-M3fDZoHk26dlNKRo';
+var supabaseClient = null;
+(function(){
+  try{
+    if(window.supabase && typeof window.supabase.createClient==='function'){
+      supabaseClient = window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+      console.log('Supabase client initialized')
+    }
+  }catch(e){console.warn('Supabase init failed',e)}
+})();
+
 // ═══ UTILS ═══
 function $(i){return document.getElementById(i);}
 function E(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
@@ -609,10 +625,12 @@ function setBtnBusy(btn,busy,busyText){
   if(!btn)return
   if(busy){
     if(btn.dataset.origText===undefined)btn.dataset.origText=btn.textContent
+    btn.dataset.busy='1'
     btn.disabled=true
     btn.style.opacity='0.6'
-    btn.textContent=busyText
+    if(busyText)btn.textContent=busyText
   } else {
+    btn.dataset.busy='0'
     btn.disabled=false
     btn.style.opacity=''
     if(btn.dataset.origText!==undefined){btn.textContent=btn.dataset.origText;delete btn.dataset.origText}
@@ -646,7 +664,7 @@ function loadClientsCache(){
 }
 
 function loadClients(force){
-  if(!API){
+  if(!API && !supabaseClient){
     $('clist').innerHTML='<div style="text-align:center;padding:30px"><div style="font-size:40px">⚙️</div><div style="font-size:15px;font-weight:700;margin-top:10px;color:var(--blue)">Sozlamalarni kiriting</div><div style="font-size:13px;color:var(--sub);margin-top:6px">Pastdagi ⚙️ tugmani bosing</div></div>'
     return
   }
@@ -672,10 +690,81 @@ function loadClients(force){
   loadPage(0)
 }
 
+// Server-side search using Supabase .ilike on name/phone/phone2
+function searchClients(q){
+  q = (q||'').trim()
+  if(!q){ // empty - load cached/default
+    loadClients(false)
+    return
+  }
+  if(supabaseClient){
+    $('clist').innerHTML='<div class="loading"><div class="sp"></div>Qidirilmoqda...</div>'
+    var like = '%'+q+'%'
+    supabaseClient.from('clients').select('*').or("name.ilike.'%"+q+"%' , phone.ilike.'%"+q+"%' , phone2.ilike.'%"+q+"%'").limit(500).then(function(resp){
+      if(resp.error){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+resp.error.message+'</div>';return}
+      D = resp.data || []
+      processD(); renderAll(); saveClientsCache();
+    }).catch(function(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'})
+    return
+  }
+  // fallback to local filtering
+  renderC(true)
+}
+
 var LOADING=false;
 var REFRESH_BUF=null;
 function loadPage(offset){
-  api('getClients',{offset:offset,limit:500},function(data,err){
+  // Supabase-backed client loading (falls back to Apps Script if supabaseClient is null)
+  var limit = 500;
+  if(supabaseClient){
+    var from = offset;
+    var to = offset + limit - 1;
+    supabaseClient
+      .from('clients')
+      .select('*', { count: 'exact' })
+      .range(from, to)
+      .then(function(resp){
+        var err = resp.error;
+        var batch = resp.data || [];
+        var total = typeof resp.count==='number'?resp.count:0;
+        if(err){
+          LOADING=false;
+          if(REFRESH_BUF){REFRESH_BUF=null;return}
+          $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+err.message+'</div>'
+          return
+        }
+        if(REFRESH_BUF){
+          REFRESH_BUF = REFRESH_BUF.concat(batch);
+        } else {
+          var existingIds=new Set(D.map(function(c){return c.id}));
+          batch = batch.filter(function(c){return !existingIds.has(c.id)});
+          D = D.concat(batch);
+          processD();
+          $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... '+D.length+' / '+total+'</div>'
+          if(offset===0)renderAll();
+        }
+        if(offset + batch.length < total){
+          loadPage(offset + limit);
+        } else {
+          LOADING=false;
+          if(REFRESH_BUF){
+            D=REFRESH_BUF;REFRESH_BUF=null
+            processD();renderAll();
+            toast('Royxat yangilandi: '+D.length+' ta mijoz')
+          } else {
+            renderAll();
+            toast('Yuklandi: '+D.length+' ta mijoz')
+          }
+          saveClientsCache();
+        }
+      }).catch(function(e){
+        LOADING=false;
+        $('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'
+      })
+    return
+  }
+  // Fallback to existing Apps Script API
+  api('getClients',{offset:offset,limit:limit},function(data,err){
     if(err||!data||data.error){
       LOADING=false;
       if(REFRESH_BUF){REFRESH_BUF=null;return}
@@ -686,7 +775,6 @@ function loadPage(offset){
     if(REFRESH_BUF){
       REFRESH_BUF=REFRESH_BUF.concat(batch)
     } else {
-      // Prevent duplicates
       var existingIds=new Set(D.map(function(c){return c.id}));
       batch=batch.filter(function(c){return !existingIds.has(c.id)});
       D=D.concat(batch)
@@ -695,7 +783,7 @@ function loadPage(offset){
       if(offset===0)renderAll()
     }
     if(data.hasMore){
-      loadPage(offset+500)
+      loadPage(offset+limit)
     } else {
       LOADING=false;
       if(REFRESH_BUF){
@@ -901,9 +989,30 @@ function renderQueueBox(c){
 }
 
 function nextClient(){
-  if(!API){toast('Avval Apps Script URL kiriting!');return}
   var btn=$('next-client-btn')
   btn.style.opacity='.6'
+  if(supabaseClient){
+    // Find next client: status empty or null and not taken
+    supabaseClient.from('clients').select('*').or("status.eq.'' , status.is.null").limit(1).order('days',{ascending:false}).then(function(resp){
+      btn.style.opacity='1'
+      if(resp.error){toast('Xatolik: '+resp.error.message);return}
+      var rows=resp.data||[]
+      if(!rows.length){toast('Navbat boshi: mijoz topilmadi');return}
+      var c=rows[0]
+      var takenBy = OP+' ('+new Date().toLocaleString()+')'
+      supabaseClient.from('clients').update({status:'Взят',taken_by:takenBy}).eq('id',c.id).then(function(up){
+        if(up.error){toast('Xatolik: '+up.error.message);return}
+        // reflect locally
+        var idx=-1
+        for(var i=0;i<D.length;i++){if(String(D[i].id)===String(c.id)){idx=i;break}}
+        if(idx>=0){D[idx].status='Взят';D[idx].takenBy=takenBy}
+        else{c.days=parseInt(c.days)||0;c.debt=parseInt(c.debt)||0;c.orders=parseInt(c.orders)||0; c.takenBy=takenBy; c.status='Взят'; D.unshift(c); processD()}
+        renderAll(); openC(c.id); toast('🎯 Yangi mijoz tayinlandi')
+      }).catch(function(e){toast('Xatolik: '+e)})
+    }).catch(function(e){btn.style.opacity='1';toast('Xatolik: '+e)})
+    return
+  }
+  if(!API){btn.style.opacity='1';toast('Avval Apps Script URL kiriting!');return}
   api('takeNextClient',{operatorName:OP},function(data,err){
     btn.style.opacity='1'
     if(err||!data||data.error){toast('Xatolik: '+(err||data.error));return}
@@ -921,6 +1030,19 @@ function nextClient(){
 
 function setQueueStatus(status){
   if(!CID)return
+  if(supabaseClient){
+    supabaseClient.from('clients').update({status:status}).eq('id',CID).then(function(resp){
+      if(resp.error){toast('Xatolik: '+resp.error.message);return}
+      var takenBy = (resp.data&&resp.data[0]&&resp.data[0].taken_by) || null
+      var c=null
+      for(var i=0;i<D.length;i++){if(String(D[i].id)===String(CID)){c=D[i];break}}
+      if(c){c.status=status;c.takenBy=takenBy||c.takenBy}
+      toast('✅ Holat saqlandi: '+status)
+      $('modal').className='mo'
+      renderAll()
+    }).catch(function(e){toast('Xatolik: '+e)})
+    return
+  }
   api('setClientStatus',{clientId:CID,status:status,operatorName:OP},function(data,err){
     if(err||!data||data.error){toast('Xatolik: '+(err||(data&&data.error)));return}
     var c=null
@@ -944,7 +1066,12 @@ function loadCallHist(id){
   var local=ST[id]&&ST[id].hist?ST[id].hist:[]
   if(local.length)renderCallHist(local)
   else el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Tarixi yoq</div>'
-  if(API){
+  if(supabaseClient){
+    supabaseClient.from('calls').select('*').eq('client_id',id).order('call_date',{ascending:false}).then(function(resp){
+      if(resp.error)console.warn('calls fetch error',resp.error)
+      else if(resp.data&&resp.data.length)renderCallHist(resp.data.map(function(r){return {callDate:r.call_date,callTime:r.call_time,status:r.status,note:r.note,operator:r.operator}}))
+    }).catch(function(e){console.warn(e)})
+  } else if(API){
     api('getCalls',{clientId:id},function(data,err){
       if(data&&data.calls&&data.calls.length)renderCallHist(data.calls)
     })
@@ -964,6 +1091,32 @@ function renderCallHist(calls){
 function loadOrderHist(id,c,isPre){
   var el=$('ohist'),cnt=$('ord-count')
   el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Yuklanmoqda...</div>'
+  if(supabaseClient){
+    // fetch done orders from Supabase
+    var q = supabaseClient.from('orders').select('*').eq('client_id',id).eq('status','done').order('date',{ascending:false})
+    if(isPre) q = q.eq('pay_method','pre')
+    q.then(function(resp){
+      if(resp.error){
+        el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Ma\'lumot yoq</div>'
+        return
+      }
+      var orders = resp.data||[]
+      var limit=isPre?orders.length:30
+      var show=orders.slice(0,limit)
+      cnt.textContent=show.length+(isPre?' ta (hammasi)':' ta (oxirgi 30)')
+      if(!show.length){
+        el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Buyurtma yoq</div>'
+        return
+      }
+      el.innerHTML=show.map(function(o){
+        var isPay=o.pay_method==='pre'
+        return '<div class="ord-item"><div><div style="font-weight:600">'+E(o.date||'—')+'</div><div class="ord-date">'+E(o.note||'')+'</div></div><div style="text-align:right"><div class="ord-sum">'+fmtSum(o.sum)+'</div><div class="ord-pay'+(isPay?' pre':'')+'">'+E(o.pay_method==='cash'?'💵 Naqd':o.pay_method==='trans'?'📱 Click':'🟣 Predoplata')+'</div></div></div>'
+      }).join('')
+    }).catch(function(e){
+      el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Ma\'lumot yoq</div>'
+    })
+    return
+  }
   if(!API){
     el.innerHTML='<div style="color:var(--sub);font-size:12px;text-align:center;padding:8px">Sheets ulanmagan</div>'
     return
@@ -1008,7 +1161,17 @@ function saveCall(){
   $('mlcall').textContent=lc
   $('modal').className='mo'
   renderAll()
-  if(API){
+  if(supabaseClient){
+    supabaseClient.from('calls').insert([{client_id:CID,client_name:c.name,phone:c.phone,operator:OP,status:status,note:note,call_date:dateStr,call_time:timeStr}]).then(function(res){
+      if(res.error){toast('Xatolik: '+res.error.message)}else{
+        // update client's last call info
+        supabaseClient.from('clients').update({last_call_date:dateStr+' '+timeStr,last_call_status:status}).eq('id',CID).then(function(up){
+          if(up.error)console.warn('client last call update failed',up.error)
+        })
+        toast('Saqlandi ✅')
+      }
+    }).catch(function(e){toast('Xatolik: '+e)})
+  } else if(API){
     api('logCall',{clientId:CID,clientName:c.name,phone:c.phone,operator:OP,status:status,note:note},function(data,err){
       toast(data&&data.success?'Saqlandi ✅':'Lokal saqlandi')
     })
@@ -1041,7 +1204,14 @@ function saveEdit(){
   $('mcall').href=c.phone?'tel:'+c.phone:'#'
   $('madr').textContent=c.addrNorm||c.addr||'—'
   renderAll()
-  if(API){
+  if(supabaseClient){
+    supabaseClient.from('clients').update({
+      name:upd.name,phone:upd.phone,phone2:upd.phone2,addr:upd.addr,addrNorm:upd.addr,manager:upd.manager,predoplata:upd.predoplata,note:upd.note
+    }).eq('id',upd.id).then(function(res){
+      if(res.error)toast('Xatolik: '+res.error.message)
+      else toast('Yangilandi ✅')
+    }).catch(function(e){toast('Xatolik: '+e)})
+  } else if(API){
     api('updateClient',upd,function(data,err){
       toast(data&&data.success?'Yangilandi ✅':'Lokal yangilandi')
     })
@@ -1122,6 +1292,25 @@ function loadDeliveries(){
     else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
   }
   var params={deliveryDate:filterDate}
+  if(supabaseClient){
+    var q = supabaseClient.from('orders').select('*').eq('status','pending')
+    if(filterDate) q = q.eq('delivery_date',filterDate)
+    if(ROLE==='co') q = q.eq('courier','K'+COURIER_ZONE)
+    q.order('delivery_date',{ascending:true}).then(function(resp){
+      if(resp.error){
+        $('courier-list').innerHTML='<div style="text-align:center;color:var(--red);padding:30px;font-size:13px">Yuklab bo\'lmadi.<br>Internet aloqasini tekshiring.</div>'
+        return
+      }
+      var data = resp.data||[]
+      DELIVERIES = data.map(function(d){
+        return {id:d.id,clientId:d.client_id,clientName:d.client_name,qty:parseInt(d.qty)||1,deliveryDate:d.delivery_date||'',address:d.address||'',phone:d.phone||''}
+      })
+      renderCourier()
+    }).catch(function(e){
+      $('courier-list').innerHTML='<div style="text-align:center;color:var(--red);padding:30px;font-size:13px">Yuklab bo\'lmadi.<br>Internet aloqasini tekshiring.</div>'
+    })
+    return
+  }
   if(ROLE==='co')params.courier='K'+COURIER_ZONE
   api('getDeliveries',params,function(data,err){
     if(err){
@@ -1180,18 +1369,30 @@ function confirmDelivery(){
   var qty=CURR_QTY,price=CURR_PRICE,payMethod=CURR_PAY,sum=CURR_QTY*CURR_PRICE
   var c=findClient(d.clientId)
   $('deliv-modal').className='mo'
-  api('completeDelivery',{deliveryId:d.id,qty:qty,price:price,sum:sum,payMethod:payMethod},function(data,err){
-    if(data&&data.success){
+  if(supabaseClient){
+    supabaseClient.from('orders').update({status:'done',qty:qty,price:price,sum:sum,pay_method:payMethod}).eq('id',d.id).then(function(res){
+      if(res.error){toast('Xatolik! '+res.error.message);return}
       var idx=DELIVERIES.indexOf(d)
       if(idx>=0)DELIVERIES.splice(idx,1)
       DONE_TODAY.push({clientId:d.clientId,qty:qty,price:price,sum:sum,payMethod:payMethod,doneTime:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})})
       CURR_DELIV=null
       renderCourier()
       toast('Yetkazildi! '+sum.toLocaleString()+' som ✅')
-    } else {
-      toast('Xatolik! Internetni tekshiring')
-    }
-  })
+    }).catch(function(e){toast('Xatolik! '+e)})
+  } else {
+    api('completeDelivery',{deliveryId:d.id,qty:qty,price:price,sum:sum,payMethod:payMethod},function(data,err){
+      if(data&&data.success){
+        var idx=DELIVERIES.indexOf(d)
+        if(idx>=0)DELIVERIES.splice(idx,1)
+        DONE_TODAY.push({clientId:d.clientId,qty:qty,price:price,sum:sum,payMethod:payMethod,doneTime:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})})
+        CURR_DELIV=null
+        renderCourier()
+        toast('Yetkazildi! '+sum.toLocaleString()+' som ✅')
+      } else {
+        toast('Xatolik! Internetni tekshiring')
+      }
+    })
+  }
   if(c&&API){
     api('logCall',{
       clientId:d.clientId,clientName:c.name,phone:c.phone,operator:OP,
@@ -1204,26 +1405,42 @@ function confirmDelivery(){
 function addDeliveryRequest(deliveryDate,btn){
   if(!CURR_ASSIGN)return
   if(!deliveryDate){toast('Sana aniqlanmadi!');return}
-  if(!API){toast('API sozlanmagan!');return}
+  if(btn && btn.dataset.busy==='1')return
+  if(!API && !supabaseClient){toast('API sozlanmagan!');return}
   var btnIds=['da-today','da-tomorrow','da-custom']
-  btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=true})
+  btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=true;b.dataset.busy='1'}})
   setBtnBusy(btn,true,'Qoshilmoqda...')
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
-  api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
-    if(data&&data.success){
+  if(supabaseClient){
+    supabaseClient.from('orders').insert([{client_id:clientId,client_name:clientName,qty:1,delivery_date:deliveryDate,status:'pending',operator:OP}]).then(function(res){
+      if(res.error){
+        setBtnBusy(btn,false);btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}});toast('Xatolik: '+res.error.message);return
+      }
       toast('Yetkazish qoshildi: '+deliveryDate)
       setBtnBusy(btn,false)
-      btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=false})
+      btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}})
       $('deliv-assign-box').style.display='none'
       $('modal').className='mo'
       CURR_ASSIGN=null
       loadDeliveries()
-    } else {
-      setBtnBusy(btn,false)
-      btnIds.forEach(function(id){var b=$(id);if(b)b.disabled=false})
-      toast('Xatolik! Qayta urinib koring')
-    }
-  })
+    }).catch(function(e){setBtnBusy(btn,false);btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}});toast('Xatolik: '+e)})
+  } else {
+    api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
+      if(data&&data.success){
+        toast('Yetkazish qoshildi: '+deliveryDate)
+        setBtnBusy(btn,false)
+        btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}})
+        $('deliv-assign-box').style.display='none'
+        $('modal').className='mo'
+        CURR_ASSIGN=null
+        loadDeliveries()
+      } else {
+        setBtnBusy(btn,false)
+        btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}})
+        toast('Xatolik! Qayta urinib koring')
+      }
+    })
+  }
 }
 
 // ═══ COURIER: NEW ORDER ═══
@@ -1254,7 +1471,19 @@ function updateCoPayBtns(){
 function lookupCoPhone(){
   var phone=$('co-phone').value
   var digits=(phone||'').replace(/\D/g,'')
-  if(digits.length<9||!API)return
+  if(digits.length<9||(!API && !supabaseClient))return
+  if(supabaseClient){
+    var q = supabaseClient.from('clients').select('*').or("phone.ilike.%"+digits+"% , phone2.ilike.%"+digits+"%")
+    q.then(function(resp){
+      if(resp.error||!resp.data||!resp.data.length){ CO_CLIENT_ID=''; if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()} return }
+      var data = resp.data[0]
+      CO_CLIENT_ID=data.id||''
+      if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
+      if(data.name&&!$('co-name').value.trim())$('co-name').value=data.name
+      if(data.addr&&!$('co-addr').value.trim())$('co-addr').value=data.addr
+    }).catch(function(e){console.warn(e);CO_CLIENT_ID='';if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}})
+    return
+  }
   api('lookupClientByPhone',{phone:phone},function(data,err){
     if(data&&data.found){
       CO_CLIENT_ID=data.clientId||''
@@ -1271,9 +1500,9 @@ function lookupCoPhone(){
 function saveCourierOrder(){
   var name=$('co-name').value.trim()
   if(!name){toast('Mijoz ismini kiriting!');return}
-  if(!API){toast('API sozlanmagan!');return}
+  if(!API && !supabaseClient){toast('API sozlanmagan!');return}
   var btn=$('co-save')
-  if(btn&&btn.disabled)return
+  if(btn&&btn.dataset.busy==='1')return
   var price=parseInt($('co-price').value)||0
   var dateVal=$('co-date').value
   var deliveryDate=dateVal?inputDateToUz(dateVal):todayUz()
@@ -1284,17 +1513,29 @@ function saveCourierOrder(){
     courier:'K'+COURIER_ZONE,operator:OP
   }
   setBtnBusy(btn,true,'Qoshilmoqda...')
-  api('addCourierOrder',data,function(res,err){
-    if(res&&res.success){
+  if(supabaseClient){
+    supabaseClient.from('orders').insert([{
+      client_name:data.clientName,address:data.address,phone:data.phone,qty:data.qty,price:data.price,pay_method:data.payMethod,delivery_date:data.deliveryDate,note:data.note,courier:data.courier,status:'pending',operator:data.operator
+    }]).then(function(res){
+      if(res.error){setBtnBusy(btn,false);toast('Xatolik: '+res.error.message);return}
       toast('Qoshildi')
       setBtnBusy(btn,false)
       $('co-modal').className='mo'
       loadDeliveries()
-    } else {
-      setBtnBusy(btn,false)
-      toast('Xatolik! Qayta urinib koring')
-    }
-  })
+    }).catch(function(e){setBtnBusy(btn,false);toast('Xatolik: '+e)})
+  } else {
+    api('addCourierOrder',data,function(res,err){
+      if(res&&res.success){
+        toast('Qoshildi')
+        setBtnBusy(btn,false)
+        $('co-modal').className='mo'
+        loadDeliveries()
+      } else {
+        setBtnBusy(btn,false)
+        toast('Xatolik! Qayta urinib koring')
+      }
+    })
+  }
 }
 
 // ═══ HISOBOT (BOSS) ═══
@@ -1311,6 +1552,36 @@ function loadAnalytics(){
   var courier=$('hr-courier').value
   $('hr-day-table').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px"><div class="sp" style="margin:0 auto"></div></td></tr>'
   $('hr-courier-table').innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px"><div class="sp" style="margin:0 auto"></div></td></tr>'
+  if(supabaseClient){
+    var pattern = '%.'+pad2(month)+'.'+year
+    var q = supabaseClient.from('orders').select('*').ilike('date',pattern)
+    if(courier) q = q.eq('courier',courier)
+    q.then(function(resp){
+      if(resp.error){toast('Xatolik: '+resp.error.message);return}
+      var rows = resp.data||[]
+      var data = {totalOrders:rows.length,totalRevenue:0,totalBottles:0,doneCount:0,pendingCount:0,bySource:{operator:0,courier:0},byDay:[],byCourier:[]}
+      var byDayMap = {}, byCourierMap = {}
+      rows.forEach(function(r){
+        var sum = parseInt(r.sum)||0; var qty = parseInt(r.qty)||0; var st = r.status||''; var cour = r.courier||''; var src = r.source||'';
+        data.totalRevenue+=sum; data.totalBottles+=qty; if(st==='done')data.doneCount++; else data.pendingCount++
+        if(src==='courier') data.bySource.courier++; else data.bySource.operator++
+        // byDay
+        var d = r.date||r.delivery_date||''
+        if(!byDayMap[d]) byDayMap[d]={date:d,orders:0,bottles:0,revenue:0,done:0,pending:0}
+        byDayMap[d].orders++; byDayMap[d].bottles+=qty; byDayMap[d].revenue+=sum; if(st==='done')byDayMap[d].done++; else byDayMap[d].pending++
+        // byCourier
+        var key = cour||'unassigned'
+        if(!byCourierMap[key]) byCourierMap[key]={courier:key,orders:0,bottles:0,revenue:0}
+        byCourierMap[key].orders++; byCourierMap[key].bottles+=qty; byCourierMap[key].revenue+=sum
+      })
+      data.byDay = Object.keys(byDayMap).sort().map(function(k){return byDayMap[k]})
+      data.byCourier = Object.keys(byCourierMap).map(function(k){
+        var c = byCourierMap[k]; c.avgPerDay = Math.round(c.orders/Math.max(1,data.byDay.length)); return c
+      })
+      renderAnalytics(data)
+    }).catch(function(e){toast('Xatolik: '+e)})
+    return
+  }
   api('getAnalytics',{month:month,year:year,courier:courier},function(data,err){
     if(err||!data||data.error){
       toast('Xatolik: '+(err||(data&&data.error)))
@@ -1509,7 +1780,10 @@ window.addEventListener('DOMContentLoaded',function(){
     $('fpills').querySelectorAll('.pill').forEach(function(x){x.className='pill'})
     p.className='pill on';CF=p.dataset.f;renderC(true)
   })
-  $('sinp').addEventListener('input',function(){renderC(true)})
+  $('sinp').addEventListener('input',function(){
+    var q = ($('sinp').value||'').trim();
+    if(q.length>1 && supabaseClient){ searchClients(q); } else { renderC(true); }
+  })
   $('lmbtn').addEventListener('click',function(){OF+=PG;renderC(false)})
 
   // Modal
