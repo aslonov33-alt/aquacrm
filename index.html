@@ -637,7 +637,7 @@ var CLIENTS_CACHE_KEY='aq_clients_v1';
 var CLIENTS_CACHE_TTL=3600000; // 1 soat
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
 var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
-var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
+var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='', CO_FOUND_CLIENT=null;
 var CO_CLIENT_AUTO_POPULATED = false;
 var COURIER_NAMES={K1:'Shermat (K1)',K2:'Aziz (K2)',K3:'Azizbek (K3)'};
 
@@ -1634,8 +1634,10 @@ function addDeliveryRequest(deliveryDate,btn){
   btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=true;b.dataset.busy='1'}})
   setBtnBusy(btn,true,'Qoshilmoqda...')
   var clientId=CURR_ASSIGN.clientId,clientName=CURR_ASSIGN.clientName
+  var foundClient = findClient(clientId)
+  var clientPhone = foundClient && foundClient.phone ? foundClient.phone : ''
   if(supabaseClient){
-    supabaseClient.from('orders').insert([{id: genId(), client_id:clientId,client_name:clientName,qty:1,delivery_date:deliveryDate,status:'pending',operator:OP}]).then(function(res){
+    supabaseClient.from('orders').insert([{id: genId(), client_id:clientId, client_name:clientName, phone:clientPhone, qty:1, delivery_date:deliveryDate, status:'pending', operator:OP}]).then(function(res){
       if(res.error){
         setBtnBusy(btn,false);btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}});toast('Xatolik: '+res.error.message);return
       }
@@ -1648,7 +1650,7 @@ function addDeliveryRequest(deliveryDate,btn){
       loadDeliveries()
     }).catch(function(e){setBtnBusy(btn,false);btnIds.forEach(function(id){var b=$(id);if(b){b.disabled=false;b.dataset.busy='0'}});toast('Xatolik: '+e)})
   } else {
-    api('addDelivery',{clientId:clientId,clientName:clientName,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
+    api('addDelivery',{clientId:clientId,clientName:clientName,clientPhone:clientPhone,qty:1,deliveryDate:deliveryDate,operator:OP},function(data,err){
       if(data&&data.success){
         toast('Yetkazish qoshildi: '+deliveryDate)
         setBtnBusy(btn,false)
@@ -1668,7 +1670,7 @@ function addDeliveryRequest(deliveryDate,btn){
 
 // ═══ COURIER: NEW ORDER ═══
 function openCourierOrderModal(){
-  CO_QTY=1;CO_PAY='cash';CO_CLIENT_ID='';CO_PRICE_TOUCHED=false
+  CO_QTY=1;CO_PAY='cash';CO_CLIENT_ID='';CO_FOUND_CLIENT=null;CO_PRICE_TOUCHED=false
   CO_CLIENT_AUTO_POPULATED = false;
   $('co-name').value='';$('co-addr').value='';$('co-phone').value=''
   $('co-qty-val').textContent='1'
@@ -1695,8 +1697,10 @@ function updateCoPayBtns(){
 function lookupCoPhone(){
   var phone=$('co-phone').value
   var digits=(phone||'').replace(/\D/g,'')
-  // Reset previous lookup state before a new search
+  // Reset previous lookup state before a new search.
+  // The temporary text typed into the search field is NOT the canonical order phone.
   CO_CLIENT_ID=''
+  CO_FOUND_CLIENT=null
   if(CO_CLIENT_AUTO_POPULATED){
     $('co-name').value=''
     $('co-addr').value=''
@@ -1712,26 +1716,35 @@ function lookupCoPhone(){
     var last9 = digits.length>9?digits.slice(-9):digits
     var orStr = "phone.ilike.%"+last9+"%,phone2.ilike.%"+last9+"%"
     supabaseClient.from('clients').select('*').or(orStr).limit(5).then(function(resp){
-      if(resp.error||!resp.data||!resp.data.length){ CO_CLIENT_ID=''; if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()} return }
+      if(resp.error||!resp.data||!resp.data.length){
+        CO_CLIENT_ID='';
+        CO_FOUND_CLIENT=null;
+        if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
+        return
+      }
       var data = resp.data[0]
-      CO_CLIENT_ID=data.id||''
+      CO_FOUND_CLIENT = data
+      CO_CLIENT_ID = data.id || ''
       if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
-      // populate name/address from DB (overwrite previous auto-populated values)
+      // populate name/address/phone from DB, not the transient search text
       if(data.name) $('co-name').value = data.name
       if(data.addr) $('co-addr').value = data.addr
+      if(data.phone) $('co-phone').value = data.phone
       CO_CLIENT_AUTO_POPULATED = true
-    }).catch(function(e){console.warn(e);CO_CLIENT_ID='';if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}})
+    }).catch(function(e){console.warn(e);CO_CLIENT_ID='';CO_FOUND_CLIENT=null;if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}})
     return
   }
   api('lookupClientByPhone',{phone:phone},function(data,err){
     if(data&&data.found){
+      CO_FOUND_CLIENT = {id:data.clientId||'',name:data.name||'',phone:data.phone||'',addr:data.addr||''}
       CO_CLIENT_ID=data.clientId||''
       if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
       if(data.name) $('co-name').value = data.name
       if(data.addr) $('co-addr').value = data.addr
+      if(data.phone) $('co-phone').value = data.phone
       CO_CLIENT_AUTO_POPULATED = true
     } else {
-      CO_CLIENT_ID=''
+      CO_CLIENT_ID='';CO_FOUND_CLIENT=null;
       if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
     }
   })
@@ -1746,16 +1759,38 @@ function saveCourierOrder(){
   var price=parseInt($('co-price').value)||0
   var dateVal=$('co-date').value
   var deliveryDate=dateVal?inputDateToUz(dateVal):todayUz()
+  var foundPhone = CO_FOUND_CLIENT && CO_FOUND_CLIENT.phone ? CO_FOUND_CLIENT.phone : ($('co-phone').value.trim())
+  var foundAddr = CO_FOUND_CLIENT && CO_FOUND_CLIENT.addr ? CO_FOUND_CLIENT.addr : $('co-addr').value.trim()
+  var foundClientId = CO_FOUND_CLIENT && CO_FOUND_CLIENT.id ? CO_FOUND_CLIENT.id : CO_CLIENT_ID
   var data={
-    clientName:name,address:$('co-addr').value.trim(),phone:$('co-phone').value.trim(),
-    qty:CO_QTY,price:price,payMethod:CO_PAY,
-    deliveryDate:deliveryDate,note:$('co-note').value.trim(),
-    courier:'K'+COURIER_ZONE,operator:OP
+    clientId: foundClientId,
+    clientName:name,
+    address:foundAddr,
+    phone:foundPhone,
+    qty:CO_QTY,
+    price:price,
+    payMethod:CO_PAY,
+    deliveryDate:deliveryDate,
+    note:$('co-note').value.trim(),
+    courier:'K'+COURIER_ZONE,
+    operator:OP
   }
   setBtnBusy(btn,true,'Qoshilmoqda...')
   if(supabaseClient){
     supabaseClient.from('orders').insert([{
-      id: genId(), client_name:data.clientName,address:data.address,phone:data.phone,qty:data.qty,price:data.price,pay_method:data.payMethod,delivery_date:data.deliveryDate,note:data.note,courier:data.courier,status:'pending',operator:data.operator
+      id: genId(),
+      client_id: data.clientId || null,
+      client_name:data.clientName,
+      address:data.address,
+      phone:data.phone,
+      qty:data.qty,
+      price:data.price,
+      pay_method:data.payMethod,
+      delivery_date:data.deliveryDate,
+      note:data.note,
+      courier:data.courier,
+      status:'pending',
+      operator:data.operator
     }]).then(function(res){
       if(res.error){setBtnBusy(btn,false);toast('Xatolik: '+res.error.message);return}
       toast('Qoshildi')
