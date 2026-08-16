@@ -699,6 +699,20 @@ function loadClients(force){
   REFRESH_BUF=null
   LOADING=true;
   $('clist').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda... 0</div>'
+  // If we have Supabase, fetch total count first to update counters quickly
+  if(supabaseClient){
+    supabaseClient.from('clients').select('*', { count: 'exact', head: true }).then(function(cntResp){
+      try{
+        var total = typeof cntResp.count==='number'?cntResp.count:null
+        if(total!==null){
+          // update UI counters immediately
+          try{ $('s3').textContent = total.toLocaleString(); }catch(e){}
+          try{ $('pp1').textContent = total.toLocaleString(); }catch(e){}
+          try{ $('bu').textContent = total; }catch(e){}
+        }
+      }catch(e){}
+    }).catch(function(e){/* ignore count error */})
+  }
   loadPage(0)
 }
 
@@ -1653,7 +1667,7 @@ function showSc(n){
   var ni=$('ni-'+n);if(ni)ni.className='ni on'
   var t={home:'Bosh sahifa',clients:'Mijozlar',courier:'Yetkazish',map:'Xarita',profile:'Sozlamalar',hisobot:'Hisobot'}
   $('tbs').textContent=t[n]||''
-  if(n==='clients'){if(!D.length&&!LOADING)loadClients();else renderC(true)}
+  if(n==='clients'){ if(!LOADING){ loadClients(true); } else { renderC(true); } }
   if(n==='map')mapList()
   if(n==='courier'){loadDeliveries()}
   if(n==='hisobot'){loadAnalytics()}
@@ -1760,6 +1774,8 @@ function applyLogin(role, num, name){
     if(cfp)cfp.style.display='';
     setNav(true,true,true,true,true,false);
     showSc('home');
+    // load clients immediately for operators
+    try{ loadClients(true); }catch(e){}
   } else if(role==='boss'){
     setNav(false,false,false,false,false,true);
     showSc('hisobot');
