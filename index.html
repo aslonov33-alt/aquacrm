@@ -560,7 +560,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-08-16-4';
+var APP_VERSION='2026-08-16-5';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -651,8 +651,20 @@ function debounce(fn, wait){
 
 // Generate a reasonably-unique numeric id for inserts when DB doesn't autogenerate
 function genId(){
-  // timestamp milliseconds * 1000 + random 0..999 to reduce collision chance
-  return Date.now()*1000 + Math.floor(Math.random()*1000)
+  // Generate a reasonably-unique numeric id for inserts when DB doesn't autogenerate.
+  // Use crypto RNG when available to reduce collision chances in high-concurrency.
+  try{
+    var now = Date.now();
+    var rand = 0;
+    if(typeof crypto!=='undefined' && crypto.getRandomValues){
+      try{ rand = crypto.getRandomValues(new Uint32Array(1))[0] % 1000 }catch(e){ rand = Math.floor(Math.random()*1000) }
+    } else {
+      rand = Math.floor(Math.random()*1000)
+    }
+    return now*1000 + (rand % 1000)
+  }catch(e){
+    return Date.now()*1000 + Math.floor(Math.random()*1000)
+  }
 }
 
 // ═══ API ═══
