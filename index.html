@@ -591,7 +591,7 @@ textarea.fin{resize:none}
 
 <script>
 // ═══ APP VERSION (auto-update) ═══
-var APP_VERSION='2026-08-16-6';
+var APP_VERSION='2026-08-16-10';
 (function(){
   var saved=localStorage.getItem('app_version');
   if(saved===APP_VERSION)return;
@@ -622,6 +622,7 @@ var CLIENTS_CACHE_TTL=3600000; // 1 soat
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
 var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
 var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
+var CO_CLIENT_AUTO_POPULATED = false;
 var COURIER_NAMES={K1:'Shermat (K1)',K2:'Aziz (K2)',K3:'Azizbek (K3)'};
 
 // ═══ SUPABASE CLIENT ═══
@@ -1629,6 +1630,7 @@ function addDeliveryRequest(deliveryDate,btn){
 // ═══ COURIER: NEW ORDER ═══
 function openCourierOrderModal(){
   CO_QTY=1;CO_PAY='cash';CO_CLIENT_ID='';CO_PRICE_TOUCHED=false
+  CO_CLIENT_AUTO_POPULATED = false;
   $('co-name').value='';$('co-addr').value='';$('co-phone').value=''
   $('co-qty-val').textContent='1'
   $('co-price').value=15000
@@ -1654,7 +1656,19 @@ function updateCoPayBtns(){
 function lookupCoPhone(){
   var phone=$('co-phone').value
   var digits=(phone||'').replace(/\D/g,'')
-  if((!digits||digits.length<3) && (!API && !supabaseClient)) return
+  // Reset previous lookup state before a new search
+  CO_CLIENT_ID=''
+  if(CO_CLIENT_AUTO_POPULATED){
+    $('co-name').value=''
+    $('co-addr').value=''
+    CO_CLIENT_AUTO_POPULATED=false
+  }
+  if(!digits){
+    // phone cleared completely -> clear substituted fields and reset price
+    if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
+    return
+  }
+  if((digits.length<3) && (!API && !supabaseClient)) return
   if(supabaseClient){
     var last9 = digits.length>9?digits.slice(-9):digits
     var orStr = "phone.ilike.%"+last9+"%,phone2.ilike.%"+last9+"%"
@@ -1663,8 +1677,10 @@ function lookupCoPhone(){
       var data = resp.data[0]
       CO_CLIENT_ID=data.id||''
       if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
-      if(data.name&&!$('co-name').value.trim())$('co-name').value=data.name
-      if(data.addr&&!$('co-addr').value.trim())$('co-addr').value=data.addr
+      // populate name/address from DB (overwrite previous auto-populated values)
+      if(data.name) $('co-name').value = data.name
+      if(data.addr) $('co-addr').value = data.addr
+      CO_CLIENT_AUTO_POPULATED = true
     }).catch(function(e){console.warn(e);CO_CLIENT_ID='';if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}})
     return
   }
@@ -1672,8 +1688,9 @@ function lookupCoPhone(){
     if(data&&data.found){
       CO_CLIENT_ID=data.clientId||''
       if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
-      if(data.name&&!$('co-name').value.trim())$('co-name').value=data.name
-      if(data.addr&&!$('co-addr').value.trim())$('co-addr').value=data.addr
+      if(data.name) $('co-name').value = data.name
+      if(data.addr) $('co-addr').value = data.addr
+      CO_CLIENT_AUTO_POPULATED = true
     } else {
       CO_CLIENT_ID=''
       if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
@@ -1837,7 +1854,7 @@ function setRole(r){
 var COURIER_ZONE = 0;
 
 // Parollar — operator va kuryerlar
-var APP_VERSION = '2026-08-16-9';
+var APP_VERSION = '2026-08-16-10';
 var USERS = [
   {pass:'6001113', role:'op', num:1, name:'Operator 1'},
   {pass:'6041113', role:'op', num:2, name:'Operator 2'},
