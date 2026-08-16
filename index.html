@@ -165,6 +165,17 @@ textarea.fin{resize:none}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(function(reg){
+    console.log('ServiceWorker registered', reg.scope);
+  }).catch(function(err){
+    console.warn('ServiceWorker registration failed', err);
+  });
+}
+</script>
+
+
 <!-- LOGIN SCREEN -->
 <div class="login-screen" id="login-screen">
   <div class="login-logo">💧</div>
