@@ -166,7 +166,8 @@ textarea.fin{resize:none}
   <div class="login-title">AquaCRM</div>
   <div class="login-sub">Buxoro suv yetkazib berish</div>
   <div class="login-box">
-    <div class="login-role-title">Parolingizni kiriting</div>
+    <div class="login-role-title">Login va parolni kiriting</div>
+    <input type="text" id="login-user" class="fin" placeholder="Login (faqat kuryerlar uchun)" style="margin-bottom:10px">
     <input type="password" id="login-pass" class="fin" placeholder="Parol..." style="margin-bottom:12px;font-size:18px;letter-spacing:3px;text-align:center">
     <div id="login-err" style="color:#C62828;font-size:13px;text-align:center;min-height:18px;margin-bottom:8px"></div>
     <button class="login-btn" id="login-btn">Kirish →</button>
@@ -220,6 +221,7 @@ textarea.fin{resize:none}
     <div class="pill" data-f="called">✅ Qilindi</div>
     <div class="pill" data-f="pre">🟣 Predoplata</div>
   </div>
+  <button class="btn bp" id="new-client-btn" style="width:100%;margin-bottom:12px;display:none">+ Yangi mijoz</button>
   <div id="clist"></div>
   <div class="pi" id="cinfo"></div>
   <button class="lm" id="lmbtn" style="display:none">Koproq ⬇</button>
@@ -396,6 +398,10 @@ textarea.fin{resize:none}
         <span class="flbl">Qoshimcha telefon</span><input class="fin" id="e-phone2" type="tel">
         <span class="flbl">Manzil</span><input class="fin" id="e-addr" type="text">
         <span class="flbl">Menejer</span><input class="fin" id="e-mgr" type="text">
+        <span class="flbl">Kuryer / zona</span>
+        <select class="fin" id="e-courier">
+          <option value="">Belgilanmagan</option>
+        </select>
         <span class="flbl">Predoplata</span>
         <select class="fin" id="e-pre">
           <option value="">Yoq</option>
@@ -547,6 +553,31 @@ textarea.fin{resize:none}
   </div>
 </div>
 
+<div class="mo" id="new-client-modal">
+  <div class="mdl">
+    <div class="mh2"></div>
+    <div class="mhd">
+      <div class="mtt">+ Yangi mijoz</div>
+    </div>
+    <div class="mbd">
+      <span class="flbl" style="margin-top:0">Ism</span>
+      <input class="fin" id="nc-name" type="text" placeholder="Ism familiya">
+      <span class="flbl">Telefon</span>
+      <input class="fin" id="nc-phone" type="tel" placeholder="+998...">
+      <span class="flbl">Manzil</span>
+      <input class="fin" id="nc-addr" type="text" placeholder="Manzil">
+      <span class="flbl">Kuryer / zona</span>
+      <select class="fin" id="nc-courier">
+        <option value="">Belgilanmagan</option>
+      </select>
+      <div class="ar" style="margin-top:14px">
+        <button class="btn bp" id="nc-save" style="flex:1">Saqlash</button>
+        <button class="btn bo" id="nc-cancel">Bekor qilish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="bnav">
   <button class="ni on" id="ni-home"><span class="ni-i">🏠</span><span>Bosh sahifa</span></button>
   <button class="ni" id="ni-clients"><span class="ni-i">👥<span class="bdg" id="bu">0</span></span><span>Mijozlar</span></button>
@@ -591,7 +622,7 @@ var CLIENTS_CACHE_TTL=3600000; // 1 soat
 var DELIVERIES=[], CURR_DELIV=null, CURR_QTY=1, CURR_PRICE=13000, CURR_PAY='cash';
 var BOT_TAKEN=0, DONE_TODAY=[], CURR_ASSIGN=null, COURIER_FILTER='today';
 var CO_QTY=1, CO_PAY='cash', CO_PRICE_TOUCHED=false, CO_CLIENT_ID='';
-var COURIER_NAMES={K1:'Shermat (K1)',K2:'Mahsum (K2)'};
+var COURIER_NAMES={K1:'Shermat (K1)',K2:'Aziz (K2)',K3:'Azizbek (K3)'};
 
 // ═══ SUPABASE CLIENT ═══
 // Initialize Supabase client for frontend usage
@@ -618,8 +649,22 @@ function findClient(id){
 }
 function pad2(n){return n<10?'0'+n:''+n}
 function fmtDateUz(d){return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()}
-function todayUz(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return fmtDateUz(d)}
-function todayISO(offsetDays){var d=new Date();if(offsetDays)d.setDate(d.getDate()+offsetDays);return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())}
+function todayUz(offsetDays){
+  var d = new Date();
+  var tzOffset = 5 * 60; // Asia/Tashkent is UTC+5
+  var utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  d = new Date(utc + (tzOffset * 60000));
+  if(offsetDays){d.setDate(d.getDate()+offsetDays)}
+  return fmtDateUz(d)
+}
+function todayISO(offsetDays){
+  var d = new Date();
+  var tzOffset = 5 * 60;
+  var utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  d = new Date(utc + (tzOffset * 60000));
+  if(offsetDays){d.setDate(d.getDate()+offsetDays)}
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())
+}
 function inputDateToUz(val){var p=(val||'').split('-');return p.length===3?(p[2]+'.'+p[1]+'.'+p[0]):''}
 function setBtnBusy(btn,busy,busyText){
   if(!btn)return
@@ -682,6 +727,40 @@ function api(action,data,cb){
 
 function saveClientsCache(){
   try{localStorage.setItem(CLIENTS_CACHE_KEY,JSON.stringify({ts:Date.now(),data:D}))}catch(e){}
+}
+function normalizeCourierZone(zone){
+  if(!zone)return ''
+  var z=String(zone).trim().toUpperCase()
+  if(z.indexOf('K')===0) return z
+  if(/^\d+$/.test(z)) return 'K'+z
+  return z
+}
+function loadCourierOptions(){
+  var targetEls=['e-courier','nc-courier'];
+  var opts=[];
+  if(!supabaseClient){
+    targetEls.forEach(function(id){ var el=$(id); if(el){ el.innerHTML='<option value="">Belgilanmagan</option>' }})
+    return
+  }
+  supabaseClient.from('couriers').select('name,zone,login').eq('active',true).order('zone',{ascending:true}).then(function(resp){
+    if(resp.error||!resp.data){
+      targetEls.forEach(function(id){ var el=$(id); if(el){ el.innerHTML='<option value="">Belgilanmagan</option>' }})
+      return
+    }
+    opts = resp.data || []
+    targetEls.forEach(function(id){
+      var el=$(id); if(!el) return
+      var html='<option value="">Belgilanmagan</option>'
+      opts.forEach(function(c){ html += '<option value="'+E(normalizeCourierZone(c.zone||''))+'">'+E((c.name||'')+' ('+(c.zone||'')+')')+'</option>' })
+      el.innerHTML=html
+      if(id==='e-courier' && CID){
+        var c = findClient(CID)
+        if(c && c.courier){ el.value = normalizeCourierZone(c.courier) }
+      }
+    })
+  }).catch(function(){
+    targetEls.forEach(function(id){ var el=$(id); if(el){ el.innerHTML='<option value="">Belgilanmagan</option>' }})
+  })
 }
 function loadClientsCache(){
   try{
@@ -1129,6 +1208,36 @@ function setEdit(on){
   $('view-sec').style.display=on?'none':'block'
   $('edit-sec').style.display=on?'block':'none'
   $('edit-btn').textContent=on?'✕ Yopish':'✏️ Tahrir'
+  if(on){ loadCourierOptions() }
+}
+
+function saveNewClient(){
+  var name=$('nc-name').value.trim();
+  var phone=$('nc-phone').value.trim();
+  var addr=$('nc-addr').value.trim();
+  var courier=normalizeCourierZone($('nc-courier').value || '')
+  if(!name){toast('Ism kiritilishi shart!');return}
+  if(!phone){toast('Telefon kiritilishi shart!');return}
+  if(!supabaseClient){toast('Supabase mavjud emas!');return}
+  var payload={
+    id: genId(),
+    name:name,
+    phone:phone,
+    addr:addr,
+    addrNorm:addr,
+    manager:OP,
+    courier:courier,
+    predoplata:'',
+    note:'',
+    created_at:new Date().toISOString()
+  }
+  supabaseClient.from('clients').insert([payload]).then(function(resp){
+    if(resp.error){toast('Xatolik: '+resp.error.message);return}
+    toast('Yangi mijoz saqlandi ✅')
+    $('new-client-modal').className='mo'
+    $('nc-name').value='';$('nc-phone').value='';$('nc-addr').value='';$('nc-courier').value=''
+    loadClients(true)
+  }).catch(function(e){toast('Xatolik: '+e)} )
 }
 
 // ═══ CALL HISTORY ═══
@@ -1263,6 +1372,7 @@ function saveEdit(){
     addr:$('e-addr').value.trim(),
     addrNorm:$('e-addr').value.trim(),
     manager:$('e-mgr').value.trim(),
+    courier:normalizeCourierZone($('e-courier').value || c.courier || ''),
     predoplata:$('e-pre').value,
     note:$('e-note').value.trim()
   }
@@ -1277,7 +1387,7 @@ function saveEdit(){
   renderAll()
   if(supabaseClient){
     supabaseClient.from('clients').update({
-      name:upd.name,phone:upd.phone,phone2:upd.phone2,addr:upd.addr,addrNorm:upd.addr,manager:upd.manager,predoplata:upd.predoplata,note:upd.note
+      name:upd.name,phone:upd.phone,phone2:upd.phone2,addr:upd.addr,addrNorm:upd.addr,manager:upd.manager,courier:upd.courier,predoplata:upd.predoplata,note:upd.note
     }).eq('id',upd.id).then(function(res){
       if(res.error)toast('Xatolik: '+res.error.message)
       else toast('Yangilandi ✅')
@@ -1355,18 +1465,20 @@ function loadDeliveries(){
   if(!API){renderCourier();return}
   $('courier-list').innerHTML='<div class="loading"><div class="sp"></div>Yuklanmoqda...</div>'
   var filterDate=null
-  // Courier (ROLE==='co'): no date filter — show ALL pending for their zone
-  // so orders from previous days (still pending) are visible.
-  // Operator view uses COURIER_FILTER pills.
   if(ROLE!=='co'){
     if(COURIER_FILTER==='today')filterDate=todayUz()
     else if(COURIER_FILTER==='tomorrow')filterDate=todayUz(1)
+  } else {
+    filterDate=todayUz()
   }
   var params={deliveryDate:filterDate}
   if(supabaseClient){
     var q = supabaseClient.from('orders').select('*').eq('status','pending')
     if(filterDate) q = q.eq('delivery_date',filterDate)
-    if(ROLE==='co') q = q.eq('courier','K'+COURIER_ZONE)
+    if(ROLE==='co') {
+      var zoneKey = normalizeCourierZone('K' + (COURIER_ZONE || 0))
+      q = q.eq('courier', zoneKey)
+    }
     q.order('delivery_date',{ascending:true}).then(function(resp){
       if(resp.error){
         $('courier-list').innerHTML='<div style="text-align:center;color:var(--red);padding:30px;font-size:13px">Yuklab bo\'lmadi.<br>Internet aloqasini tekshiring.</div>'
@@ -1725,14 +1837,11 @@ function setRole(r){
 var COURIER_ZONE = 0;
 
 // Parollar — operator va kuryerlar
+var APP_VERSION = '2026-08-16-9';
 var USERS = [
   {pass:'6001113', role:'op', num:1, name:'Operator 1'},
   {pass:'6041113', role:'op', num:2, name:'Operator 2'},
   {pass:'2261001', role:'op', num:3, name:'Operator 3'},
-  {pass:'Shermat', role:'co', num:1, name:'Kuryer 1 — Shermat'},
-  {pass:'shermat', role:'co', num:1, name:'Kuryer 1 — Shermat'},
-  {pass:'Mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
-  {pass:'mahsum',  role:'co', num:2, name:'Kuryer 2 — Mahsum'},
   {pass:'boss',    role:'boss', num:0, name:'Boss'},
 ];
 
@@ -1747,18 +1856,65 @@ function initLogin(){
   if(ls) ls.style.display = 'flex';
 
   var inp = document.getElementById('login-pass');
+  var userInput = document.getElementById('login-user');
   var btn = document.getElementById('login-btn');
 
   function doLogin(){
-    var pass = (inp.value||'').trim();
+    var login = (userInput ? userInput.value : '').trim();
+    var pass = (inp ? inp.value : '').trim();
     var user = null;
     for(var i=0;i<USERS.length;i++){
       if(USERS[i].pass === pass){user=USERS[i];break;}
     }
+
+    if(!user && login && pass && supabaseClient){
+      // Case-insensitive login: prefer server-side ILIKE, fallback to local compare
+      try{
+        supabaseClient.from('couriers').select('*').ilike('login', login).eq('password', pass).eq('active', true).single().then(function(resp){
+          if(resp.error || !resp.data){
+            // fallback: fetch active couriers and match login lowercased
+            supabaseClient.from('couriers').select('*').eq('active', true).then(function(listResp){
+              if(listResp.error || !listResp.data || !listResp.data.length){
+                document.getElementById('login-err').textContent = 'Login yoki parol noto\'g\'ri!';
+                if(inp) inp.value = '';
+                if(userInput) userInput.value = '';
+                if(inp) inp.focus();
+                return;
+              }
+              var want = (login||'').toLowerCase();
+              var found = null;
+              for(var i=0;i<listResp.data.length;i++){
+                var r = listResp.data[i];
+                if((r.login||'').toLowerCase()===want && r.password===pass && r.active){ found = r; break }
+              }
+              if(!found){ document.getElementById('login-err').textContent = 'Login yoki parol noto\'g\'ri!'; if(inp) inp.value=''; if(userInput) userInput.value=''; if(inp) inp.focus(); return }
+              var zoneF = normalizeCourierZone(found.zone||'')
+              localStorage.setItem('aq_role','co');
+              localStorage.setItem('aq_num', zoneF?String(zoneF).replace(/\D/g,''):'0');
+              localStorage.setItem('aq_name', found.name||found.login);
+              localStorage.setItem('aq_zone', zoneF);
+              applyLogin('co', zoneF?String(zoneF).replace(/\D/g,''):0, found.name||found.login, zoneF);
+            }).catch(function(){ document.getElementById('login-err').textContent = 'Kuryer ma\'lumotlari topilmadi!'; });
+            return;
+          }
+          var zone = normalizeCourierZone(resp.data.zone || '');
+          var courierName = resp.data.name || login;
+          document.getElementById('login-err').textContent = '';
+          localStorage.setItem('aq_role', 'co');
+          localStorage.setItem('aq_num', zone ? String(zone).replace(/\D/g,'') : '0');
+          localStorage.setItem('aq_name', courierName);
+          localStorage.setItem('aq_zone', zone);
+          applyLogin('co', zone ? String(zone).replace(/\D/g,'') : 0, courierName, zone);
+        }).catch(function(){ document.getElementById('login-err').textContent = 'Kuryer ma\'lumotlari topilmadi!'; });
+      }catch(e){ document.getElementById('login-err').textContent = 'Kuryer ma\'lumotlari topilmadi!'; }
+      return;
+    }
+
     if(!user){
-      document.getElementById('login-err').textContent = 'Parol notogri! Qayta urinib koring.';
-      inp.value='';
-      inp.focus();
+      document.getElementById('login-err').textContent = 'Parol yoki login notogri! Qayta urinib koring.';
+      if(inp) inp.value = '';
+      if(userInput) userInput.value = '';
+      if(inp) inp.focus();
       return;
     }
     document.getElementById('login-err').textContent = '';
@@ -1768,19 +1924,22 @@ function initLogin(){
     applyLogin(user.role, user.num, user.name);
   }
 
-  btn.addEventListener('click', doLogin);
-  inp.addEventListener('keydown', function(e){if(e.key==='Enter')doLogin();});
-  setTimeout(function(){if(inp)inp.focus();}, 300);
+  if(btn) btn.addEventListener('click', doLogin);
+  if(inp) inp.addEventListener('keydown', function(e){if(e.key==='Enter')doLogin();});
+  if(userInput) userInput.addEventListener('keydown', function(e){if(e.key==='Enter')doLogin();});
+  setTimeout(function(){if(userInput) userInput.focus(); else if(inp) inp.focus();}, 300);
 }
 
-function applyLogin(role, num, name){
+function applyLogin(role, num, name, zone){
   var ls = document.getElementById('login-screen');
   if(ls) ls.style.display = 'none';
 
   ROLE = role;
+  if(role==='co'){ COURIER_ZONE = zone ? parseInt(String(zone).replace(/\D/g,'')) : parseInt(num||0); }
   var savedName = name || localStorage.getItem('aq_name') || (role==='op'?'Operator '+num:role==='boss'?'Boss':'Kuryer '+num);
   OP = savedName;
   localStorage.setItem('aq_op', OP);
+  if(zone){ localStorage.setItem('aq_zone', zone); }
 
   var pav=$('pav'),pnm=$('pnm'),prl=$('prl');
   if(pav)pav.textContent=role==='op'?'📞':role==='boss'?'📊':'🚚';
@@ -1802,7 +1961,6 @@ function applyLogin(role, num, name){
     if(cfp)cfp.style.display='';
     setNav(true,true,true,true,true,false);
     showSc('home');
-    // load clients immediately for operators
     try{ loadClients(true); }catch(e){}
   } else if(role==='boss'){
     setNav(false,false,false,false,false,true);
@@ -1835,6 +1993,7 @@ window.addEventListener('DOMContentLoaded',function(){
   OP=localStorage.getItem('aq_op')||'Operator'
   if(API){$('api-url').value=API;$('sdot').className='sdot on'}
   $('op-name').value=OP;$('pnm').textContent=OP
+  var loginField = document.getElementById('login-user'); if(loginField){ loginField.value = localStorage.getItem('aq_login')||'' }
   initLogin();
 
   // Nav
@@ -1947,6 +2106,13 @@ window.addEventListener('DOMContentLoaded',function(){
     loadClients();syncStats()
     toast('Saqlandi! Yuklanmoqda...')
   })
+  $('new-client-btn').addEventListener('click',function(){
+    loadCourierOptions();
+    $('new-client-modal').className='mo on';
+  })
+  $('nc-cancel').addEventListener('click',function(){ $('new-client-modal').className='mo' })
+  $('nc-save').addEventListener('click',saveNewClient)
+  $('new-client-modal').addEventListener('click',function(e){if(e.target===this)this.className='mo'})
   $('test-api').addEventListener('click',function(){
     if(!API){toast('URL kiriting!');return}
     $('api-st').innerHTML='<span style="color:var(--sub)">Test...</span>'
