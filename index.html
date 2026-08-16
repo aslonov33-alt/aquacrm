@@ -637,6 +637,18 @@ function setBtnBusy(btn,busy,busyText){
   }
 }
 
+// debounce helper (returns function with cancel())
+function debounce(fn, wait){
+  var t=null;
+  function wrapped(){
+    var args=arguments, ctx=this;
+    clearTimeout(t);
+    t=setTimeout(function(){ fn.apply(ctx,args); t=null }, wait||300);
+  }
+  wrapped.cancel=function(){ if(t){clearTimeout(t);t=null} }
+  return wrapped
+}
+
 // ═══ API ═══
 function api(action,data,cb){
   if(!API){cb&&cb(null,'URL kiritilmagan');return}
@@ -699,12 +711,30 @@ function searchClients(q){
   }
   if(supabaseClient){
     $('clist').innerHTML='<div class="loading"><div class="sp"></div>Qidirilmoqda...</div>'
-    var like = '%'+q+'%'
-    supabaseClient.from('clients').select('*').or("name.ilike.'%"+q+"%' , phone.ilike.'%"+q+"%' , phone2.ilike.'%"+q+"%'").limit(500).then(function(resp){
-      if(resp.error){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+resp.error.message+'</div>';return}
-      D = resp.data || []
-      processD(); renderAll(); saveClientsCache();
-    }).catch(function(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'})
+    try{
+      var raw = q
+      var digits = (raw||'').replace(/\D/g,'')
+      var clauses = []
+      // name search (case-insensitive, substring)
+      clauses.push('name.ilike.%' + raw + '%')
+      // phone search: try both full digits and last-9 digits if user typed numbers
+      if(digits && digits.length>=3){
+        var last9 = digits.length>9?digits.slice(-9):digits
+        clauses.push('phone.ilike.%' + last9 + '%')
+        clauses.push('phone.ilike.%' + digits + '%')
+        clauses.push('phone2.ilike.%' + last9 + '%')
+        clauses.push('phone2.ilike.%' + digits + '%')
+      } else {
+        clauses.push('phone.ilike.%' + raw + '%')
+        clauses.push('phone2.ilike.%' + raw + '%')
+      }
+      var orStr = clauses.join(' , ')
+      supabaseClient.from('clients').select('*').or(orStr).limit(500).then(function(resp){
+        if(resp.error){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+resp.error.message+'</div>';return}
+        D = resp.data || []
+        processD(); renderAll(); saveClientsCache();
+      }).catch(function(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'})
+    }catch(e){$('clist').innerHTML='<div style="text-align:center;color:var(--red);padding:24px">Xatolik: '+e+'</div>'}
     return
   }
   // fallback to local filtering
@@ -1780,10 +1810,16 @@ window.addEventListener('DOMContentLoaded',function(){
     $('fpills').querySelectorAll('.pill').forEach(function(x){x.className='pill'})
     p.className='pill on';CF=p.dataset.f;renderC(true)
   })
-  $('sinp').addEventListener('input',function(){
+  // Search input: debounce on typing, immediate on Enter
+  var searchHandler = debounce(function(){
     var q = ($('sinp').value||'').trim();
-    if(q.length>1 && supabaseClient){ searchClients(q); } else { renderC(true); }
-  })
+    if(q.length>0 && supabaseClient){ searchClients(q); } else { renderC(true); }
+  },300);
+  var sinp = $('sinp');
+  if(sinp){
+    sinp.addEventListener('input', function(){ searchHandler(); });
+    sinp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); searchHandler.cancel && searchHandler.cancel(); searchClients((sinp.value||'').trim()); } });
+  }
   $('lmbtn').addEventListener('click',function(){OF+=PG;renderC(false)})
 
   // Modal
