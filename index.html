@@ -660,6 +660,28 @@ function $(i){return document.getElementById(i);}
 function E(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''}
 function toast(m){var t=$('toast');t.textContent=m;t.className='toast on';clearTimeout(t._t);t._t=setTimeout(function(){t.className='toast'},2500)}
 function fmtSum(n){return n?(parseInt(n)||0).toLocaleString()+' som':'0 som'}
+function normalizeTel(phone){
+  if(!phone) return ''
+  var s = String(phone).replace(/\s+/g,'').replace(/[^\d+]/g,'')
+  if(!s) return ''
+  if(s.indexOf('+') === -1 && s.length >= 9){
+    s = '+' + s.replace(/^8/,'998')
+  }
+  if(s.indexOf('+998') !== 0 && s.length >= 9 && s.indexOf('998') === 0){
+    s = '+' + s
+  }
+  return s
+}
+function telHref(phone){
+  var cleaned = normalizeTel(phone)
+  return cleaned ? 'tel:' + cleaned : '#'
+}
+function telAnchor(phone, label){
+  var cleaned = normalizeTel(phone)
+  var text = label ? label : (cleaned || '—')
+  if(!cleaned) return E(text)
+  return '<a href="tel:' + cleaned + '" style="color:var(--blue);font-weight:700;text-decoration:none">' + E(text) + '</a>'
+}
 function findClient(id){
   for(var i=0;i<D.length;i++){if(String(D[i].id)===String(id))return D[i]}
   return null
@@ -1045,7 +1067,7 @@ function top5(){
   var el=$('top5')
   if(!lst.length){el.innerHTML='<div style="text-align:center;color:var(--sub);padding:16px;font-size:13px">Shoshilinch mijozlar yoq 🎉</div>';return}
   el.innerHTML=lst.map(function(c){
-    return '<div class="card tap" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+'</div><div class="cp">'+E(c.phone||'')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><span class="tag r">'+(c.days||'?')+' kun</span></div><div class="cb"><div class="cm"><span class="tag gr">'+(c.orders||0)+' buyurtma</span></div></div></div>'
+    return '<div class="card tap" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+'</div><div class="cp">'+telAnchor(c.phone, c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><span class="tag r">'+(c.days||'?')+' kun</span></div><div class="cb"><div class="cm"><span class="tag gr">'+(c.orders||0)+' buyurtma</span></div></div></div>'
   }).join('')
   el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){openC(this.dataset.cid)})})
 }
@@ -1075,7 +1097,7 @@ function renderC(reset){
     var k=c.courier?'<span class="tag gr">'+c.courier+'</span>':''
     var locked=isLocked(c)
     var qt=c.status?qstag(c.status):''
-    return '<div class="card tap'+(locked?' taken':'')+'" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+E(c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+qt+'</div></div></div>'
+    return '<div class="card tap'+(locked?' taken':'')+'" data-cid="'+c.id+'"><div class="ch"><div style="flex:1"><div class="cn">'+E(c.name)+(pre?' <span class="tag pu" style="font-size:10px">🟣</span>':'')+'</div><div class="cp">📱 '+telAnchor(c.phone, c.phone||'—')+'</div><div class="ca">📍 '+E(c.addr||'—')+'</div></div><div>'+ptag(c)+'</div></div><div class="cb"><div class="cm">'+dt+(s?stag(s):c.lastCallDate?'<span class="tag b">📞 '+c.lastCallDate+'</span>':c.wasCalled==='TRUE'||c.wasCalled===true?'<span class="tag b">📞 Qilindi</span>':'<span class="tag gr">Qongiroq yoq</span>')+k+qt+'</div></div></div>'
   }).join('')
   el.querySelectorAll('[data-cid]').forEach(function(el){el.addEventListener('click',function(){
     var c=null,cid=this.dataset.cid
@@ -1110,9 +1132,9 @@ function openC(id){
   $('mn').textContent=c.name
   var tags=ptag(c)+(s.status?stag(s.status):'')+(pre?'<span class="tag pu">🟣 Predoplata</span>':'')
   $('mtags').innerHTML=tags
-  $('mtel').textContent=c.phone||'—';$('mtel').href=c.phone?'tel:'+c.phone:'#'
-  $('mcall').href=c.phone?'tel:'+c.phone:'#'
-  if(c.phone2){$('mtel2').textContent=c.phone2;$('mtel2').href='tel:'+c.phone2;$('mp2r').style.display='flex'}
+  $('mtel').textContent=c.phone||'—';$('mtel').href=telHref(c.phone)
+  $('mcall').href=telHref(c.phone)
+  if(c.phone2){$('mtel2').textContent=c.phone2;$('mtel2').href=telHref(c.phone2);$('mp2r').style.display='flex'}
   else $('mp2r').style.display='none'
   $('madr').textContent=(c.addrNorm||c.addr)||'—'
   $('mmgr').textContent=c.manager||'—'
@@ -1398,8 +1420,8 @@ function saveEdit(){
   setEdit(false)
   // Refresh view
   $('mn').textContent=c.name
-  $('mtel').textContent=c.phone||'—';$('mtel').href=c.phone?'tel:'+c.phone:'#'
-  $('mcall').href=c.phone?'tel:'+c.phone:'#'
+  $('mtel').textContent=c.phone||'—';$('mtel').href=telHref(c.phone)
+  $('mcall').href=telHref(c.phone)
   $('madr').textContent=c.addrNorm||c.addr||'—'
   renderAll()
   if(supabaseClient){
@@ -1464,7 +1486,7 @@ function renderCourier(){
     var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
     return '<div class="courier-card" data-didx="'+i+'"><div class="courier-header">'+(pre?'<div style="position:absolute;right:10px;top:8px;font-size:10px;background:rgba(255,255,255,.2);padding:2px 6px;border-radius:8px">🟣 PREDOPLATA</div>':'')+
       '<div class="courier-num">'+(i+1)+'</div>'+
-      '<div style="flex:1;margin-left:10px"><div style="font-size:15px;font-weight:700">'+E(name)+'</div><div style="font-size:11px;opacity:.8">'+E(phone)+'</div></div>'+
+      '<div style="flex:1;margin-left:10px"><div style="font-size:15px;font-weight:700">'+E(name)+'</div><div style="font-size:11px;opacity:.8">'+telAnchor(phone, phone || '—')+'</div></div>'+
       '<span class="tag or">⏳</span>'+
       '</div><div class="courier-body">'+
       '<div class="courier-row"><span style="color:var(--sub)">📍 Manzil</span><span style="font-weight:600;text-align:right;max-width:60%;font-size:12px">'+E(addr)+'</span></div>'+
@@ -1533,8 +1555,9 @@ function openDelivery(idx){
   var pre=c&&(c.predoplata==='yes'||c.predoplata===true)
   $('dm-name').textContent=c?c.name:(d.clientName||'—')
   $('dm-addr').textContent='📍 '+(c?(c.addrNorm||c.addr||'—'):(d.address||'—'))
-  $('dm-tel').textContent=c&&c.phone?c.phone:(d.phone||'—');$('dm-tel').href=c&&c.phone?'tel:'+c.phone:(d.phone?'tel:'+d.phone:'#')
-  $('dm-call').href=c&&c.phone?'tel:'+c.phone:(d.phone?'tel:'+d.phone:'#')
+  var phoneVal = c&&c.phone ? c.phone : (d.phone||'')
+  $('dm-tel').textContent = phoneVal || '—'; $('dm-tel').href = telHref(phoneVal)
+  $('dm-call').href = telHref(phoneVal)
   var maddr=(c&&c.addrMaps)||((c?(c.addrNorm||c.addr||''):(d.address||''))+', Buxoro, Uzbekistan')
   $('dm-map').href='https://www.google.com/maps/search/'+encodeURIComponent(maddr)
   $('dm-debt').textContent=c&&c.debt>0?c.debt.toLocaleString()+' som ⚠️':'Qarz yoq ✅'
