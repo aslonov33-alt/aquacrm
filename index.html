@@ -540,6 +540,7 @@ if('serviceWorker' in navigator){
       <input class="fin" type="text" id="co-addr" placeholder="Manzil">
       <span class="flbl">Telefon</span>
       <input class="fin" type="tel" id="co-phone" placeholder="+998...">
+      <div id="co-phone-suggestions" style="display:none;margin-top:8px;max-height:180px;overflow:auto;border:1px solid #E3E8F0;border-radius:10px;background:#fff"></div>
       <div class="stl">Soni (butilka)</div>
       <div class="qty-box">
         <button class="qty-btn qty-minus" id="co-qty-minus">-</button>
@@ -1672,7 +1673,8 @@ function addDeliveryRequest(deliveryDate,btn){
 function openCourierOrderModal(){
   CO_QTY=1;CO_PAY='cash';CO_CLIENT_ID='';CO_FOUND_CLIENT=null;CO_PRICE_TOUCHED=false
   CO_CLIENT_AUTO_POPULATED = false;
-  $('co-name').value='';$('co-addr').value='';$('co-phone').value=''
+  $('co-name').value='';$('co-addr').value='';$('co-phone').value='';
+  var sbox=$('co-phone-suggestions'); if(sbox){ sbox.style.display='none'; sbox.innerHTML=''; }
   $('co-qty-val').textContent='1'
   $('co-price').value=15000
   $('co-note').value=''
@@ -1694,58 +1696,85 @@ function updateCoPayBtns(){
   el=$('co-pay-debt');el.style.background=CO_PAY==='debt'?'#C62828':'#FFEBEE';el.style.color=CO_PAY==='debt'?'#fff':'#C62828'
 }
 
+function renderCoPhoneSuggestions(items){
+  var box=$('co-phone-suggestions');
+  if(!box)return
+  if(!items||!items.length){box.style.display='none';box.innerHTML='';return}
+  box.innerHTML=items.map(function(client){
+    var name = client.name || 'Mijoz';
+    var phone = client.phone || client.phone2 || '';
+    return '<div class="co-suggest-item" data-co-id="'+(client.id||'')+'" style="padding:10px 12px;border-bottom:1px solid #F0F4F8;cursor:pointer;font-size:13px;line-height:1.4">'+
+      '<div style="font-weight:700;color:var(--text)">'+E(name)+'</div>'+
+      '<div style="color:var(--blue);font-weight:600">'+E(phone)+'</div>'+ 
+      '</div>'
+  }).join('')
+  box.style.display='block'
+  box.querySelectorAll('.co-suggest-item').forEach(function(item){
+    item.addEventListener('click',function(){
+      var clientId=this.dataset.coId
+      var client = items.filter(function(c){ return String(c.id)===String(clientId) })[0]
+      if(!client)return
+      CO_FOUND_CLIENT = client
+      CO_CLIENT_ID = client.id || ''
+      CO_CLIENT_AUTO_POPULATED = true
+      $('co-name').value = client.name || ''
+      $('co-addr').value = client.addr || ''
+      $('co-phone').value = client.phone || ''
+      if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
+      box.style.display='none';box.innerHTML=''
+    })
+  })
+}
+
 function lookupCoPhone(){
   var phone=$('co-phone').value
   var digits=(phone||'').replace(/\D/g,'')
-  // Reset previous lookup state before a new search.
-  // The temporary text typed into the search field is NOT the canonical order phone.
-  CO_CLIENT_ID=''
-  CO_FOUND_CLIENT=null
-  if(CO_CLIENT_AUTO_POPULATED){
-    $('co-name').value=''
-    $('co-addr').value=''
-    CO_CLIENT_AUTO_POPULATED=false
+
+  // Manual input is always editable and never force-overwritten.
+  // Keep the temporary search text separate from the selected client data.
+  if(CO_FOUND_CLIENT && phone && String(phone).trim() !== String(CO_FOUND_CLIENT.phone||'').trim()){
+    CO_FOUND_CLIENT = null
+    CO_CLIENT_ID = ''
+    CO_CLIENT_AUTO_POPULATED = false
   }
-  if(!digits){
-    // phone cleared completely -> clear substituted fields and reset price
+
+  if(!phone || !digits){
+    CO_FOUND_CLIENT = null
+    CO_CLIENT_ID = ''
+    CO_CLIENT_AUTO_POPULATED = false
+    renderCoPhoneSuggestions([])
     if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
     return
   }
-  if((digits.length<3) && (!API && !supabaseClient)) return
-  if(supabaseClient){
-    var last9 = digits.length>9?digits.slice(-9):digits
-    var orStr = "phone.ilike.%"+last9+"%,phone2.ilike.%"+last9+"%"
-    supabaseClient.from('clients').select('*').or(orStr).limit(5).then(function(resp){
-      if(resp.error||!resp.data||!resp.data.length){
-        CO_CLIENT_ID='';
-        CO_FOUND_CLIENT=null;
-        if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
-        return
-      }
-      var data = resp.data[0]
-      CO_FOUND_CLIENT = data
-      CO_CLIENT_ID = data.id || ''
-      if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
-      // populate name/address/phone from DB, not the transient search text
-      if(data.name) $('co-name').value = data.name
-      if(data.addr) $('co-addr').value = data.addr
-      if(data.phone) $('co-phone').value = data.phone
-      CO_CLIENT_AUTO_POPULATED = true
-    }).catch(function(e){console.warn(e);CO_CLIENT_ID='';CO_FOUND_CLIENT=null;if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}})
+
+  if(digits.length < 3){
+    renderCoPhoneSuggestions([])
     return
   }
+
+  if(supabaseClient){
+    var last9 = digits.length>9?digits.slice(-9):digits
+    var orStr = "phone.ilike.%"+last9+"%,phone2.ilike.%"+last9+"%,phone.ilike.%"+digits+"%,phone2.ilike.%"+digits+"%"
+    supabaseClient.from('clients').select('*').or(orStr).limit(10).then(function(resp){
+      if(resp.error||!resp.data||!resp.data.length){
+        renderCoPhoneSuggestions([])
+        return
+      }
+      renderCoPhoneSuggestions(resp.data)
+    }).catch(function(){ renderCoPhoneSuggestions([]) })
+    return
+  }
+
   api('lookupClientByPhone',{phone:phone},function(data,err){
     if(data&&data.found){
-      CO_FOUND_CLIENT = {id:data.clientId||'',name:data.name||'',phone:data.phone||'',addr:data.addr||''}
-      CO_CLIENT_ID=data.clientId||''
-      if(!CO_PRICE_TOUCHED){$('co-price').value=13000;updateCoTotal()}
-      if(data.name) $('co-name').value = data.name
-      if(data.addr) $('co-addr').value = data.addr
-      if(data.phone) $('co-phone').value = data.phone
-      CO_CLIENT_AUTO_POPULATED = true
+      renderCoPhoneSuggestions([{
+        id:data.clientId||'',
+        name:data.name||'',
+        phone:data.phone||'',
+        addr:data.addr||''
+      }])
     } else {
-      CO_CLIENT_ID='';CO_FOUND_CLIENT=null;
-      if(!CO_PRICE_TOUCHED){$('co-price').value=15000;updateCoTotal()}
+      renderCoPhoneSuggestions([])
     }
   })
 }
@@ -2168,7 +2197,12 @@ window.addEventListener('DOMContentLoaded',function(){
   on('co-qty-minus','click',function(){if(CO_QTY>1){CO_QTY--;$('co-qty-val').textContent=CO_QTY;updateCoTotal()}})
   on('co-qty-plus','click',function(){CO_QTY++;$('co-qty-val').textContent=CO_QTY;updateCoTotal()})
   on('co-price','input',function(){CO_PRICE_TOUCHED=true;updateCoTotal()})
-  on('co-phone','input',lookupCoPhone)
+  on('co-phone','input',function(){
+    CO_FOUND_CLIENT = null; CO_CLIENT_ID = ''; CO_CLIENT_AUTO_POPULATED = false;
+    $('co-name').value = $('co-name').value.trim() ? $('co-name').value.trim() : $('co-name').value;
+    $('co-addr').value = $('co-addr').value.trim() ? $('co-addr').value.trim() : $('co-addr').value;
+    lookupCoPhone();
+  })
   on('co-pay-cash','click',function(){CO_PAY='cash';updateCoPayBtns()})
   on('co-pay-debt','click',function(){CO_PAY='debt';updateCoPayBtns()})
   on('co-save','click',saveCourierOrder)
